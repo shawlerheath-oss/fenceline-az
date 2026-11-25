@@ -5,12 +5,13 @@ import { SPECIES, speciesById } from './species.js';
 import { FEATURES } from './features.js';
 import { ATTRIBUTIONS, APP_VERSION, RULES, TZ } from './config.js';
 import { pickValue } from './arcgis.js';
-import { rateStand, bestWinds, windCalendar, activityScore, wmoDesc } from './weather.js';
+import { rateStand, bestWinds, windCalendar, activityScore, wmoDesc, getAirQuality, aqiLevel } from './weather.js';
 import { Tracker } from './tracking.js';
 import { unitHTML, unitName } from './units.js';
 import { icon, markerSVG } from './icons.js';
 import { h, esc, qs, qsa, fmtDist, fmtElev, fmtArea, fmtSpeed, fmtTemp, fmtTime, fmtDate, fmtDuration, compass16, haversine, bearing, round } from './util.js';
 import { fmtBearing } from './tools.js';
+import { guideBlock } from './guides.js';
 
 const kindDot = (kind, color) => `<span class="mk-dot" style="--c:${color || (KINDS[kind] || KINDS.pin).color}">${markerSVG((KINDS[kind] || KINDS.pin).glyph)}</span>`;
 const sw = (on) => `<span class="switch ${on ? 'on' : ''}" role="switch" aria-checked="${on}"></span>`;
@@ -47,9 +48,29 @@ function toggleDetails(row, def, app, id) {
   const ex = qs('.sub', row);
   if (ex) { ex.remove(); return; }
   const op = def.kind === 'raster' ? `<label class="field">Opacity<input type="range" min="0.1" max="1" step="0.05" value="${app.map.getLayer(id) ? app.map.getPaintProperty(id, 'raster-opacity') : def.opacity || 0.7}"></label>` : '';
-  const sub = h(`<div class="item sub"><p class="small">${esc(def.desc)}</p>${legend(def)}${op}${def.minzoom ? `<p class="small muted">Loads at zoom ${def.minzoom}+ for the area on screen.</p>` : ''}</div>`);
+  const sub = h(`<div class="item sub"><p class="small">${esc(def.desc)}</p>${legend(def)}${op}${dateBar(def, app, id)}${def.minzoom ? `<p class="small muted">Loads at zoom ${def.minzoom}+ for the area on screen.</p>` : ''}</div>`);
   const r = qs('input[type=range]', sub); if (r) r.addEventListener('input', () => app.layers.setOpacity(id, +r.value));
+  wireDateBar(sub, def, app, id);
   row.appendChild(sub);
+}
+// Date controls for dated rasters (satellite passes, radar, snow): step to older or newer dates, or refresh for the current view.
+// A resolver that takes arguments (`({ step }) => …`) supports stepping; `() => …` resolvers are always "latest".
+function dateBar(def, app, id) {
+  if (!def.dated) return '';
+  const meta = app.layers.getMeta(id); const on = app.layers.isOn(id);
+  const label = !on ? 'Turn the layer on to load the newest date.' : meta ? esc(meta.label || meta.date || '') : 'Finding the newest pass…';
+  const dis = on ? '' : 'disabled';
+  const steps = def.resolve && def.resolve.length > 0 ? `<button class="btn btn-sm" data-step="1" ${dis}>◀ Older</button><button class="btn btn-sm" data-step="-1" ${dis}>Newer ▶</button>` : '';
+  const re = def.recenter ? `<button class="btn btn-sm" data-reload ${dis}>Refresh here</button>` : '';
+  return `<div class="row between gap" style="margin-top:8px"><span class="small" data-meta>${label}</span><span class="row gap">${steps}${re}</span></div>`;
+}
+function wireDateBar(sub, def, app, id) {
+  if (!def.dated) return;
+  const metaEl = qs('[data-meta]', sub); const btns = qsa('[data-step],[data-reload]', sub);
+  const busy = (msg) => { metaEl.textContent = msg; btns.forEach((b) => { b.disabled = true; }); };
+  const done = (meta) => { metaEl.textContent = meta ? (meta.label || meta.date || '') : 'Nothing published for that date'; btns.forEach((b) => { b.disabled = false; }); };
+  qsa('[data-step]', sub).forEach((b) => b.addEventListener('click', async () => { busy('Loading…'); done(await app.layers.stepDate(id, +b.dataset.step)); }));
+  const rl = qs('[data-reload]', sub); if (rl) rl.addEventListener('click', async () => { busy('Looking for the newest clear scene…'); done(await app.layers.reloadRaster(id)); });
 }
 
 // ---------- Hunt ----------
@@ -60,6 +81,7 @@ export function huntPanel(app) {
   const chips = h(`<div class="species">${SPECIES.map((s) => `<button type="button" data-sp="${s.id}" class="${s.id === sp.id ? 'on' : ''}">${esc(s.label)}</button>`).join('')}</div>`);
   qsa('button', chips).forEach((b) => b.addEventListener('click', () => { app.setSpecies(b.dataset.sp); app.openPanel('hunt'); }));
   root.appendChild(chips);
+  root.appendChild(guideBlock(app));
   root.appendChild(lightBlock(app));
   root.appendChild(weatherNow(app));
   root.appendChild(standsBlock(app));
@@ -127,6 +149,7 @@ export function weatherPanel(app) {
   root.appendChild(h(`<div class="sheet-title"><h2>Forecast</h2><button class="btn btn-ghost btn-icon" data-close aria-label="Close">${icon('close')}</button></div>`));
   if (!w) { root.appendChild(h('<p class="muted">No forecast yet. Check your connection.</p>')); return root; }
   root.appendChild(h(`<p class="small muted">${esc(app.wxLabel())} · Open-Meteo · ${w.stale ? 'cached, offline' : `updated ${fmtTime(w.fetchedAt, TZ)}`}</p>`));
+  root.appendChild(airBlock(app));
   const stands = app.markup.byKind('stand').filter((s) => s.bedding != null);
   if (stands.length) {
     const sel = h(`<label class="field">Wind calendar for stand<select>${stands.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label>`);
@@ -221,6 +244,8 @@ export function morePanel(app) {
     ['settings', 'settings', 'Settings', 'Units, theme, night mode, legal-light rule, weather point'],
     ['tracks', 'route', 'Tracks', 'Recorded hikes'],
     ['units', 'map', 'Game units', 'Browse units and zoom to one'],
+    ['guide', 'book', 'Species guides', 'Habitat, calendar, sign, tactics, calling, shot placement, Arizona rules'],
+    ['insights', 'eye', 'Sightings insights', 'Time, wind, moon and pressure behind your own logged sightings'],
     ['features', 'list', 'Feature coverage', 'What onX, HuntStand, BaseMap, GoHunt charge for, and where it is here'],
     ['install', 'download', 'Install on iPhone', 'Add to Home Screen for full-screen use'],
     ['about', 'info', 'About & data sources', `Fenceline ${APP_VERSION}`]
@@ -300,6 +325,8 @@ export function unitPanel(app, feature) {
   const root = h('<div class="stack"></div>');
   root.appendChild(h(`<div class="sheet-title"><h2>Unit ${esc(unitName(feature.properties))}</h2><button class="btn btn-ghost btn-icon" data-close aria-label="Close">${icon('close')}</button></div>`));
   root.appendChild(h(`<div>${unitHTML(feature.properties)}</div>`));
+  const hunts = feature.properties.HUNT;
+  if (hunts) root.appendChild(h(`<div class="kv"><span>Hunts</span><b>${esc(String(hunts).replace(/[;,]s*/g, ' · '))}</b></div>`));
   const b = h(`<div class="row gap"><button class="btn btn-primary">Zoom to unit</button><button class="btn" data-dl>Download for offline</button></div>`);
   qs('.btn-primary', b).addEventListener('click', () => { app.fitGeom(feature.geometry); app.ui.hideSheet(); });
   qs('[data-dl]', b).addEventListener('click', () => { app.fitGeom(feature.geometry); app.openPanel('offline'); });
@@ -308,6 +335,15 @@ export function unitPanel(app, feature) {
 }
 
 // ---------- Identify card ----------
+const DROUGHT = ['D0 abnormally dry', 'D1 moderate drought', 'D2 severe drought', 'D3 extreme drought', 'D4 exceptional drought'];
+const useLevel = (g) => (+g >= 20 ? 'High use' : +g >= 10 ? 'Medium use' : 'Low use');
+// BLM PLSSID, e.g. AZ140140N0040E0 → "T14N R4E · Gila & Salt River meridian".
+function plssText(id) {
+  const m = /^([A-Z]{2})(\d{2})(\d{3})(\d)([NS])(\d{3})(\d)([EW])/.exec(String(id || ''));
+  if (!m) return '';
+  const mer = { 14: 'Gila & Salt River', 22: 'Navajo', 27: 'San Bernardino' }[+m[2]];
+  return `T${+m[3]}${m[4] !== '0' ? `.${m[4]}` : ''}${m[5]} R${+m[6]}${m[7] !== '0' ? `.${m[7]}` : ''}${m[8]}${mer ? ` · ${mer} meridian` : ''}`;
+}
 const F = (p, keys) => pickValue(p, keys);
 function summarize(id, p) {
   const acres = (v) => (v != null ? `${round(+v, 1).toLocaleString()} ac` : '');
@@ -328,6 +364,19 @@ function summarize(id, p) {
     case 'blmRec': return { title: F(p, ['FET_NAME', 'NAME', 'Name', 'SITE_NAME', /name/i]) || 'BLM site', sub: F(p, [/type/i, /feat/i]) || 'BLM recreation site' };
     case 'fires': return { title: `${p.INCIDENT || 'Fire'} (${p.FIRE_YEAR_INT || p.FIRE_YEAR || '?'})`, sub: `${acres(p.GIS_ACRES)} burned · ${new Date().getFullYear() - (p.FIRE_YEAR_INT || +p.FIRE_YEAR || 0)} yrs ago` };
     case 'firesCurrent': return { title: p.poly_IncidentName || 'Active fire', sub: `${acres(p.poly_GISAcres)} · ${p.attr_PercentContained != null ? `${p.attr_PercentContained}% contained` : 'this year'}` };
+    case 'plss': return { title: F(p, ['TWNSHPLAB']) || plssText(p.PLSSID) || 'Township', sub: 'Township and range (BLM PLSS)' };
+    case 'sections': return { title: `Section ${p.FRSTDIVNO || '?'}`, sub: plssText(p.PLSSID) || 'PLSS section' };
+    case 'roadless': return { title: F(p, [/area_name/i, /roadless.*name/i, /^name$/i, /name/i]) || 'Roadless area', sub: [F(p, [/category/i, /type/i]), acres(F(p, [/gis_acres/i, /acres/i]))].filter(Boolean).join(' · ') || 'Inventoried Roadless Area' };
+    case 'ranges': return { title: F(p, ['MasterName', 'Range_Name', /name/i]) || 'Range', sub: [F(p, [/type/i, /facility/i]), F(p, [/city/i, /town/i]), F(p, [/phone/i])].filter(Boolean).join(' · ') || 'Shooting range' };
+    case 'timber': return { title: p.activity_name || p.treatment_type || 'Timber treatment', sub: [p.sale_name, p.fy_completed ? `completed FY${p.fy_completed}` : '', acres(p.gis_acres)].filter(Boolean).join(' · ') };
+    case 'fuels': return { title: p.treatment_type || p.activity || 'Fuels treatment', sub: [p.treatment_name, p.method, p.stage, p.fiscal_year_completed ? `FY${p.fiscal_year_completed}` : '', acres(p.gis_acres)].filter(Boolean).join(' · ') };
+    case 'restoration': return { title: p.HabitatAction || 'Habitat project', sub: [p.CoverType, p.Acres ? acres(p.Acres) : '', p.HabitatAction2].filter(Boolean).join(' · ') };
+    case 'migration': return { title: `${p.fl_species || 'Ungulate'} corridor`, sub: [useLevel(p.GRIDCODE), F(p, [/herd/i, /population/i, /project/i])].filter(Boolean).join(' · ') };
+    case 'migrationRoutes': return { title: `${p.fl_species || 'Ungulate'} route`, sub: [F(p, [/season/i]), F(p, [/herd/i, /population/i]), F(p, [/year/i])].filter(Boolean).join(' · ') || 'Collared-animal route' };
+    case 'winterRange': return { title: `${p.fl_species || 'Ungulate'} ${String(p.fl_season || 'range').toLowerCase()}`, sub: [F(p, [/herd/i, /population/i, /project/i]), acres(F(p, [/acres/i]))].filter(Boolean).join(' · ') || 'Seasonal range' };
+    case 'cwd': return { title: p.zone_type || 'CWD surveillance zone', sub: 'Carcass transport rules apply; AZGFD asks for heads to test' };
+    case 'wolf': return { title: 'Mexican wolf occupied range', sub: 'Protected: confirm coyote vs wolf before any predator shot' };
+    case 'drought': return { title: DROUGHT[p.dm] || 'Drought', sub: p.period ? `Week of ${p.period}` : 'US Drought Monitor' };
     case 'gmu': return { title: `Unit ${unitName(p)}`, sub: p.REG_NAME || '' };
     default: { const ks = Object.keys(p).filter((k) => p[k] != null && !/objectid|shape|globalid/i.test(k)).slice(0, 4); return { title: LAYER_DEFS[id]?.label || id, sub: ks.map((k) => `${k}: ${p[k]}`).join(' · ') }; }
   }
@@ -342,6 +391,7 @@ export function identifyHTML(app, hits, d) {
   if (d.truck) tiles.push(`<div class="tile"><div class="v">${fmtDist(d.truck.d, u)}</div><div class="k">${fmtBearing(d.truck.brg)} to ${esc(d.truck.name)}</div></div>`);
   if (d.water) tiles.push(`<div class="tile"><div class="v">${fmtDist(d.water.d, u)}</div><div class="k">${compass16(d.water.brg)} to ${esc(String(d.water.name))}</div></div>`);
   if (tiles.length) parts.push(`<div class="tiles">${tiles.join('')}</div>`);
+  if (d.crop) parts.push(`<div class="kv"><span>Crop</span><b>${esc(d.crop.label)}${d.crop.isFeed ? ' <span class="muted small">· feed field: glass the edges at dusk</span>' : ''}</b></div>`);
   if (d.land) parts.push(`<div class="kv"><span>Land</span><b>${esc(landName(d.land.manager))}${d.land.owner && d.land.owner !== d.land.manager ? ` · ${esc(d.land.owner)}` : ''}${d.land.access ? ` · access: ${esc(d.land.access)}` : ''}</b></div>`);
   const rows = hits.filter((hh) => hh.id !== 'gmu').map((hh) => { const s = summarize(hh.id, hh.feature.properties); return `<div class="kv"><span>${esc(LAYER_DEFS[hh.id]?.label || hh.id)}</span><b>${esc(s.title)}${s.sub ? `<br><span class="muted small">${esc(s.sub)}</span>` : ''}</b></div>`; });
   if (rows.length) parts.push(rows.join(''));
@@ -355,4 +405,15 @@ export function landName(code) {
   const m = { BLM: 'BLM public land', USFS: 'National Forest', FS: 'National Forest', NPS: 'National Park Service', FWS: 'US Fish & Wildlife', USFWS: 'US Fish & Wildlife', ST: 'State Trust land', STATE: 'State land', SLD: 'State Trust land', ASLD: 'State Trust land', BIA: 'Tribal land', TRIBAL: 'Tribal land', DOD: 'Military', PVT: 'Private', PRIVATE: 'Private', PRI: 'Private', BOR: 'Bureau of Reclamation', LG: 'Local government', AZGFD: 'Arizona Game & Fish', OTHER: 'Other' };
   if (!code) return 'Unknown';
   return m[String(code).toUpperCase()] || String(code);
+}
+
+// Air quality tiles (smoke, dust, UV) filled in once Open-Meteo answers.
+function airBlock(app) {
+  const el = h('<div class="tiles"><div class="tile"><div class="v">…</div><div class="k">US AQI</div></div><div class="tile"><div class="v">…</div><div class="k">PM2.5 smoke</div></div><div class="tile"><div class="v">…</div><div class="k">UV index</div></div></div>');
+  const [lon, lat] = app.wxPoint();
+  getAirQuality(lon, lat).then((a) => {
+    const [lvl, cls] = aqiLevel(a.aqi); const dust = a.dust != null && a.dust >= 50 ? ` · dust ${Math.round(a.dust)}` : '';
+    el.innerHTML = `<div class="tile"><div class="v">${a.aqi ?? '—'}</div><div class="k">US AQI <span class="pill ${cls}">${esc(lvl)}</span></div></div><div class="tile"><div class="v">${a.pm25 != null ? Math.round(a.pm25) : '—'}</div><div class="k">PM2.5 µg/m³${dust}</div></div><div class="tile"><div class="v">${a.uv != null ? Math.round(a.uv) : '—'}</div><div class="k">UV index</div></div>`;
+  }).catch(() => { el.innerHTML = '<p class="small muted" style="margin:0">Air quality unavailable right now.</p>'; });
+  return el;
 }

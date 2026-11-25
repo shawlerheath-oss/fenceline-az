@@ -2,6 +2,9 @@
 import { APP_VERSION, TZ, AZ_BOUNDS, DEFAULT_CENTER, DEFAULT_ZOOM, GLYPHS, TILES, RULES } from './config.js';
 import { store } from './store.js';
 import { registerTerrainProtocols, elevationAt } from './terrain.js';
+import { registerHabitatProtocol, setHabitatPreset } from './habitat.js';
+import * as G from './guides.js';
+import * as I from './insights.js';
 import { applyBasemap, nextBasemap, BASEMAPS } from './basemaps.js';
 import { LayerManager, LAYER_DEFS } from './layers.js';
 import { Markup, KINDS } from './markup.js';
@@ -75,12 +78,14 @@ app.openPanel = async (name, arg) => {
     case 'install': content = P.installPanel(); break;
     case 'units': content = P.unitsPanel(app); break;
     case 'unit': content = P.unitPanel(app, arg); break;
+    case 'guide': content = G.guidePanel(app, arg); break;
+    case 'insights': content = I.insightsPanel(app, arg); break;
     case 'offline': content = await E.offlinePanel(app); break;
     case 'boundary': content = E.boundaryPanel(app); break;
     case 'edit': content = E.waypointEditor(app, arg); break;
     default: content = P.morePanel(app);
   }
-  app.ui.showSheet(content, { tab, full: ['weather', 'features', 'offline', 'edit', 'about'].includes(name) });
+  app.ui.showSheet(content, { tab, full: ['weather', 'features', 'offline', 'edit', 'about', 'guide', 'insights'].includes(name) });
 };
 app.onTab = (name) => { if (name === 'map') { app.ui.hideSheet(); return; } app.openPanel(name); };
 app.onSheetClose = () => { app.panel = null; };
@@ -101,8 +106,15 @@ function saveLayers() { app.settings = { ...app.settings, layersOn: app.layers.l
 app.setSpecies = (id) => {
   const sp = speciesById(id);
   app.setSetting('species', sp.id); app.setSetting('legalRule', sp.legal);
+  app.updateHabitat();
   app.layers.applyPreset(sp.layers); saveLayers();
   app.ui.toast(`${sp.label} layers on`);
+};
+// Point the habitat-finder raster at the current species and month; redraw it if it is showing.
+app.updateHabitat = () => {
+  const p = G.habitatFor(app.settings.species);
+  if (p) setHabitatPreset({ label: p.label, elev: p.elev, asp: p.asp, slope: p.slope });
+  if (app.layers && app.layers.isOn('habitat')) app.layers.reloadRaster('habitat').catch(() => {});
 };
 
 // ---------- Tools ----------
@@ -286,7 +298,13 @@ function bindUI() {
   });
   qs('#btn-3d').addEventListener('click', () => app.toggle3D());
   qs('#btn-basemap').addEventListener('click', () => { const k = nextBasemap(app.map.__basemap || app.settings.basemap); applyBasemap(app.map, k); app.setSetting('basemap', k); app.ui.toast(BASEMAPS[k].label); });
-  qs('#btn-compass').addEventListener('click', () => app.map.easeTo({ bearing: 0, pitch: app.is3D ? 60 : 0 }));
+  // Compass: tap to face north; tap again while facing north to lock the map to your heading (tap once more to stop).
+  const north = () => app.map.easeTo({ bearing: 0, pitch: app.is3D ? 60 : 0 });
+  const setHeadingUp = (on) => { app.headingUp = on; qs('#btn-compass').classList.toggle('active', on); if (on) { app.tracker.start(); app.ui.toast('Heading-up: the map turns with you'); } else north(); };
+  let lastRot = 0;
+  app.onHeading = (hd) => { if (!app.headingUp || Date.now() - lastRot < 200) return; lastRot = Date.now(); app.map.easeTo({ bearing: hd, duration: 200 }); };
+  qs('#btn-compass').addEventListener('click', () => { if (app.headingUp) setHeadingUp(false); else if (Math.abs(app.map.getBearing()) > 1) north(); else setHeadingUp(true); });
+  app.map.on('rotatestart', (e) => { if (app.headingUp && e.originalEvent) setHeadingUp(false); });
   qs('#btn-zoom-in').addEventListener('click', () => app.map.zoomIn());
   qs('#btn-zoom-out').addEventListener('click', () => app.map.zoomOut());
 }
@@ -319,7 +337,7 @@ async function boot() {
   applyTheme();
   app.ui = new UI(app);
   registerSW();
-  registerTerrainProtocols(maplibregl);
+  registerTerrainProtocols(maplibregl); registerHabitatProtocol(maplibregl);
   const map = new maplibregl.Map({
     container: 'map', center: app.settings.center || DEFAULT_CENTER, zoom: app.settings.zoom || DEFAULT_ZOOM,
     style: { version: 8, glyphs: GLYPHS, sources: {}, layers: [{ id: 'anchor-base', type: 'background', paint: { 'background-color': '#0b0f0a' } }] },
@@ -339,9 +357,10 @@ function onLoad() {
   app.layers = new LayerManager(map, { onChange: () => { saveLayers(); app.refreshPanel('layers'); }, onStatus: () => app.refreshPanel('layers') });
   app.layers.setOfflineProvider(makeOfflineProvider());
   installScentLayers(map); Markup.installLayers(map); Tracker.installLayers(map); Measure.installLayers(map);
-  app.markup = new Markup(map, { onSelect: (it) => app.selectItem(it) });
-  app.tracker = new Tracker(map, { onPosition, onError: (e) => app.ui.toast(gpsError(e)), onRecord: () => app.updateStatus() });
+  app.markup = new Markup(map, { onSelect: (it) => app.selectItem(it), env: () => I.envSnapshot(app) });
+  app.tracker = new Tracker(map, { onPosition, onError: (e) => app.ui.toast(gpsError(e)), onRecord: () => app.updateStatus(), onHeading: (hd) => app.onHeading(hd) });
   app.measure = new Measure(map); app.guard = new BoundaryGuard(); app.guard.setPermitted(app.settings.permitted);
+  app.updateHabitat();
   app.layers.restore(app.settings.layersOn || Object.keys(LAYER_DEFS).filter((k) => LAYER_DEFS[k].default));
   const gmuPoll = setInterval(() => { if (app.layers.getFeatures('gmu').length) { clearInterval(gmuPoll); updateUnitChip(); app.refreshPanel('hunt'); } }, 800);
   app.markup.load().then(() => { app.updateScent(); app.updateStatus(); });

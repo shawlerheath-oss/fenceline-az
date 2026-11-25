@@ -4,9 +4,9 @@ import { haversine, uid, lineLengthM } from './util.js';
 import { markerSVG } from './icons.js';
 
 export class Tracker {
-  constructor(map, { onPosition, onError, onRecord } = {}) {
+  constructor(map, { onPosition, onError, onRecord, onHeading } = {}) {
     this.map = map; this.pos = null; this.heading = null; this.watchId = null; this.follow = false; this.wake = null;
-    this.rec = null; this.onPosition = onPosition || (() => {}); this.onError = onError || (() => {}); this.onRecord = onRecord || (() => {});
+    this.rec = null; this.onPosition = onPosition || (() => {}); this.onError = onError || (() => {}); this.onRecord = onRecord || (() => {}); this.onHeading = onHeading || (() => {});
     this.marker = null; this.accCircle = null;
     this._lastRecPos = null;
   }
@@ -57,7 +57,7 @@ export class Tracker {
     const handler = (e) => {
       let h = e.webkitCompassHeading;
       if (h == null && e.alpha != null) h = 360 - e.alpha;
-      if (h != null && !isNaN(h)) { this.heading = h; this._renderMarker(); }
+      if (h != null && !isNaN(h)) { this.heading = h; this._renderMarker(); this.onHeading(h); }
     };
     const attach = () => window.addEventListener('deviceorientation', handler, true);
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {

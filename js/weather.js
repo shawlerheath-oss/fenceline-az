@@ -1,5 +1,5 @@
 // Open-Meteo forecast, pressure trend, and wind-vs-stand logic.
-import { TZ } from './config.js';
+import { TZ, SERVICES } from './config.js';
 import { store } from './store.js';
 import { angleDiff, norm360, compass16, withRetry } from './util.js';
 
@@ -122,4 +122,23 @@ export function activityScore(fc, moonIllumination) {
   if (fc.current.code >= 95) s -= 20; else if ((fc.current.code ?? 0) >= 61) s -= 8;
   if (moonIllumination != null) s += moonIllumination > 0.85 ? -6 : moonIllumination < 0.15 ? 4 : 0;
   return Math.max(0, Math.min(100, Math.round(s)));
+}
+
+// Open-Meteo air quality at a point: US AQI, PM2.5 (smoke), PM10, dust (haboob season) and UV index. Memoized 30 minutes.
+const aqMemo = new Map();
+export async function getAirQuality(lon, lat) {
+  const key = `${lat.toFixed(2)},${lon.toFixed(2)}`; const c = aqMemo.get(key);
+  if (c && Date.now() - c.fetchedAt < TTL_MS) return c;
+  const url = `${SERVICES.airQuality.url}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=us_aqi,pm2_5,pm10,dust,uv_index&timezone=${encodeURIComponent(TZ)}`;
+  const res = await fetch(url); if (!res.ok) throw new Error(`Air quality HTTP ${res.status}`);
+  const j = await res.json(); const cur = j.current || {};
+  const num = (v) => (typeof v === 'number' ? v : null);
+  const out = { aqi: num(cur.us_aqi), pm25: num(cur.pm2_5), pm10: num(cur.pm10), dust: num(cur.dust), uv: num(cur.uv_index), fetchedAt: Date.now() };
+  aqMemo.set(key, out); return out;
+}
+export function aqiLevel(aqi) {
+  if (aqi == null) return ['Unknown', ''];
+  if (aqi <= 50) return ['Good', 'ok']; if (aqi <= 100) return ['Moderate', ''];
+  if (aqi <= 150) return ['Unhealthy for sensitive groups', 'warn']; if (aqi <= 200) return ['Unhealthy', 'bad'];
+  if (aqi <= 300) return ['Very unhealthy', 'bad']; return ['Hazardous', 'bad'];
 }

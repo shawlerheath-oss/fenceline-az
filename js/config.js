@@ -1,12 +1,16 @@
 // Fenceline configuration: Arizona bounds, tile templates, and public GIS services.
-// Every endpoint below was checked live on 2026-11-24 (HTTP 200, CORS allowed, f=geojson supported).
+// Every endpoint below was checked live (HTTP 200, CORS allowed, f=geojson where queried) on 2026-11-24.
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.3.0';
 export const TZ = 'America/Phoenix';
 
 export const AZ_BOUNDS = [[-115.2, 31.0], [-108.6, 37.3]];
+export const AZ_BBOX = [AZ_BOUNDS[0][0], AZ_BOUNDS[0][1], AZ_BOUNDS[1][0], AZ_BOUNDS[1][1]];
 export const DEFAULT_CENTER = [-111.66, 34.3];
 export const DEFAULT_ZOOM = 6.2;
+
+const RULE = (name) => encodeURIComponent(JSON.stringify({ rasterFunction: name }));
+const DEP3 = 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&f=image';
 
 export const TILES = {
   esriImagery: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -16,13 +20,38 @@ export const TILES = {
   usgsImageryOnly: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
   usgsHydro: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSHydroCached/MapServer/tile/{z}/{y}/{x}',
   usgsShadedRelief: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}',
-  terrarium: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+  terrarium: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+  // USGS 3DEP image service: lidar-grade hillshade and contours rendered per tile from the bbox placeholder MapLibre fills in.
+  lidarHillshade: `${DEP3}&format=jpgpng&renderingRule=${RULE('Hillshade Multidirectional')}`,
+  contours: `${DEP3}&format=png32&transparent=true&renderingRule=${RULE('Contour 25')}`,
+  // USGS-hosted NAIP aerial photography (60 cm, flown every 2 to 3 years).
+  naip: 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image',
+  // NOAA NOHRSC national snow analysis, layer 0 = snow depth, updated daily.
+  snowDepth: 'https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&layers=show:0&format=png32&transparent=true&f=image',
+  // USDA NASS Cropland Data Layer (CroplandCROS image service, latest year on top).
+  cropland: 'https://pdi.scinet.usda.gov/image/rest/services/CDL_WM/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image'
 };
+
+// NASA GIBS (Worldview) dated WMTS layers. Level = deepest zoom published; dates are UTC; 8-day products start Jan 1.
+export const GIBS = {
+  base: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best',
+  trueColor: { id: 'MODIS_Terra_CorrectedReflectance_TrueColor', level: 9, ext: 'jpg', lag: 1 },
+  viirs: { id: 'VIIRS_NOAA20_CorrectedReflectance_TrueColor', level: 9, ext: 'jpg', lag: 1 },
+  snowCover: { id: 'MODIS_Terra_NDSI_Snow_Cover', level: 8, ext: 'png', lag: 1 },
+  ndvi: { id: 'MODIS_Terra_NDVI_8Day', level: 9, ext: 'png', period: 8, lag: 10 },
+  hlsS30: { id: 'HLS_S30_Nadir_BRDF_Adjusted_Reflectance', level: 12, ext: 'png', lag: 2 },
+  hlsL30: { id: 'HLS_L30_Nadir_BRDF_Adjusted_Reflectance', level: 12, ext: 'png', lag: 2 }
+};
+// RainViewer public radar composite: fetch the frame list, then tile the newest past frame.
+export const RAINVIEWER = { api: 'https://api.rainviewer.com/public/weather-maps.json', suffix: '/256/{z}/{x}/{y}/2/1_1.png' };
 
 export const GLYPHS = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf';
 export const FONT = ['Open Sans Semibold'];
 
-// ArcGIS REST services. Field lists are tried in order (exact name or RegExp) against returned properties.
+const AGFD = 'https://services2.arcgis.com/os1CphwIyxBDDUGn/arcgis/rest/services';
+const EDW = 'https://apps.fs.usda.gov/arcx/rest/services/EDW';
+const MIG2 = 'https://services1.arcgis.com/IAQQkLXctKHrf8Av/arcgis/rest/services/Ungulate_Migrations_USGS_Vol2/FeatureServer';
+
 export const SERVICES = {
   sma: {
     label: 'Land ownership (BLM Surface Management Agency)',
@@ -38,12 +67,12 @@ export const SERVICES = {
   },
   ownership: {
     label: 'Statewide land ownership (AZGFD)',
-    url: 'https://services2.arcgis.com/os1CphwIyxBDDUGn/ArcGIS/rest/services/LandOwnership_updated/FeatureServer/0',
+    url: `${AGFD}/LandOwnership_updated/FeatureServer/0`,
     nameFields: ['OWNNAME', /ownname/i], categoryFields: ['CATEGORY', /categ/i], managerFields: ['MANAGEDNAM', /managed/i], descFields: ['DESC_', /desc/i]
   },
   gmu: {
     label: 'Game Management Units (AZGFD)',
-    url: 'https://services2.arcgis.com/os1CphwIyxBDDUGn/ArcGIS/rest/services/HunterDonationInteractiveWebmap_1921/FeatureServer/0',
+    url: `${AGFD}/HunterDonationInteractiveWebmap_1921/FeatureServer/0`,
     nameFields: ['GMUNAME', /gmu/i, /unit/i],
     regionFields: ['REG_NAME', 'GF_REGION'], acresFields: ['ACRES', 'SQ_MILES'],
     linkFields: { agfd: 'AGFDLink', usfs: 'USFSLink', blm: 'BLMLink', fws: 'USFWSLink' }
@@ -56,13 +85,14 @@ export const SERVICES = {
     trsFields: ['township', 'townshipdirection', 'range', 'rangedirection', 'section']
   },
   wildlifeAreas: {
-    label: 'AZGFD wildlife areas',
-    url: 'https://services2.arcgis.com/os1CphwIyxBDDUGn/ArcGIS/rest/services/AGFD_Wildlife_Areas/FeatureServer/0',
-    nameFields: [/name/i, /area/i]
+    label: 'AZGFD wildlife areas and properties',
+    url: `${AGFD}/AGFDLands/FeatureServer/1`,
+    otherUrl: `${AGFD}/AGFDLands/FeatureServer/5`,
+    nameFields: ['MasterName', /name/i, /area/i]
   },
   hpcWater: {
     label: 'Habitat Partnership water projects (AZGFD)',
-    url: 'https://services2.arcgis.com/os1CphwIyxBDDUGn/arcgis/rest/services/HPC_Projects_submissions/FeatureServer/0',
+    url: `${AGFD}/HPC_Projects_submissions/FeatureServer/0`,
     nameFields: ['project_name', /name/i], unitFields: ['gmu_number'], typeFields: ['water_type', 'project_type'],
     statusFields: ['project_status'], reliableFields: ['reliable_water'], perennialFields: ['perennial_water'],
     where: "water_action IS NOT NULL OR water_type IS NOT NULL OR water_catchment IS NOT NULL OR dirt_tank IS NOT NULL OR project_type LIKE '%ater%'"
@@ -79,13 +109,13 @@ export const SERVICES = {
   },
   springsWells: {
     label: 'Springs and wells (AZGFD watershed)',
-    url: 'https://services2.arcgis.com/os1CphwIyxBDDUGn/ArcGIS/rest/services/Watershed_Mgmt_Waters/FeatureServer/0',
+    url: `${AGFD}/Watershed_Mgmt_Waters/FeatureServer/0`,
     nameFields: ['name', /name/i]
   },
   mvum: {
     label: 'USFS Motor Vehicle Use Map roads',
-    url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/1',
-    trailsUrl: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_MVUM_01/MapServer/2',
+    url: `${EDW}/EDW_MVUM_01/MapServer/1`,
+    trailsUrl: `${EDW}/EDW_MVUM_01/MapServer/2`,
     idFields: ['id', /^id$/i], nameFields: ['name', /name/i],
     designationFields: ['mvum_symbol_name', 'symbol', /symbol/i],
     seasonFields: ['seasonal'], openFields: ['highclearancevehicle_datesopen', 'passengervehicle_datesopen'],
@@ -94,19 +124,19 @@ export const SERVICES = {
   },
   trails: {
     label: 'USFS trails',
-    url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_TrailNFSPublish_01/MapServer/0',
+    url: `${EDW}/EDW_TrailNFSPublish_01/MapServer/0`,
     nameFields: ['trail_name', /name/i], noFields: ['trail_no'], typeFields: ['trail_type', 'allowed_terra_use'],
     motorFields: ['terra_motorized'], milesFields: ['gis_miles'], surfaceFields: ['trail_surface']
   },
   wilderness: {
     label: 'Wilderness areas',
-    url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_Wilderness_01/MapServer/0',
+    url: `${EDW}/EDW_Wilderness_01/MapServer/0`,
     blmUrl: 'https://gis.blm.gov/azarcgis/rest/services/nlcs/BLM_AZ_WLD/FeatureServer/0',
     nameFields: ['wildernessname', 'NLCS_NAME', /name/i], acresFields: ['gis_acres', /acre/i]
   },
   forests: {
     label: 'National Forest boundaries',
-    url: 'https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_ForestSystemBoundaries_01/MapServer/0',
+    url: `${EDW}/EDW_ForestSystemBoundaries_01/MapServer/0`,
     nameFields: ['forestname', /name/i]
   },
   allotments: {
@@ -126,7 +156,50 @@ export const SERVICES = {
     nameFields: ['INCIDENT', 'poly_IncidentName', /incident/i, /name/i],
     yearFields: ['FIRE_YEAR_INT', 'FIRE_YEAR', /year/i], acresFields: ['GIS_ACRES', 'poly_GISAcres', /acres/i],
     where: 'FIRE_YEAR_INT >= 2005'
-  }
+  },
+  // ---- Added in 0.2.0 (onX parity) ----
+  plss: {
+    label: 'Public Land Survey System (BLM CadNSDI)',
+    townships: 'https://gis.blm.gov/arcgis/rest/services/Cadastral/BLM_Natl_PLSS_CadNSDI/MapServer/1',
+    sections: 'https://gis.blm.gov/arcgis/rest/services/Cadastral/BLM_Natl_PLSS_CadNSDI/MapServer/2'
+  },
+  roadless: { label: 'Inventoried Roadless Areas (USFS, 2001 rule)', url: `${EDW}/EDW_InventoriedRoadlessAreas2001_01/MapServer/0` },
+  timber: { label: 'Timber harvest and thinning (USFS FACTS)', recentUrl: `${EDW}/EDW_TimberHarvest_01/MapServer/11`, olderUrl: `${EDW}/EDW_TimberHarvest_01/MapServer/0` },
+  fuels: { label: 'Hazardous fuels treatments and prescribed fire (USFS FACTS)', url: `${EDW}/EDW_HazardousFuelsTreatments_01/MapServer/15` },
+  restoration: { label: 'Habitat restoration projects (AZGFD)', url: `${AGFD}/HabitatRestoration_points/FeatureServer/0` },
+  ranges: { label: 'Shooting and archery ranges (AZGFD)', rangesUrl: `${AGFD}/AGFDLands/FeatureServer/6`, archeryUrl: `${AGFD}/More_layers_718/FeatureServer/2` },
+  cwd: { label: 'CWD surveillance zones (AZGFD)', url: `${AGFD}/Adjacent_Surveillance_Zones/FeatureServer/0` },
+  wolf: { label: 'Mexican wolf occupied range (AZGFD)', url: `${AGFD}/WolfOccupiedRange/FeatureServer/0` },
+  huntSpecies: { label: 'Huntable species by unit (AZGFD)', base: `${AGFD}/Hunt_Species/FeatureServer`, layers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] },
+  // USGS Western Migrations (Ungulate Migrations of the Western United States, vol. 2) plus AZGFD's Interstate 17 elk study.
+  // Each entry: [url, species, season]. GRIDCODE 1 / 10 / 20 (or Use_ Low / Medium / High) = corridor use intensity.
+  migration: {
+    label: 'Big game migration corridors and seasonal ranges (USGS)',
+    corridors: [
+      [`${MIG2}/75`, 'Mule deer', 'Corridor'], [`${MIG2}/71`, 'Mule deer', 'Corridor'], [`${MIG2}/37`, 'Pronghorn', 'Corridor'],
+      [`${MIG2}/90`, 'Elk', 'Corridor'], [`${MIG2}/92`, 'Elk', 'Corridor'],
+      ['https://services1.arcgis.com/CNfeg2bqPqhTN34y/arcgis/rest/services/Elk_AZ_17/FeatureServer/0', 'Elk', 'Corridor']
+    ],
+    routes: [
+      [`${MIG2}/19`, 'Mule deer', 'Route'], [`${MIG2}/17`, 'Mule deer', 'Route'], [`${MIG2}/18`, 'Mule deer', 'Route'],
+      [`${MIG2}/3`, 'Pronghorn', 'Route'], [`${MIG2}/29`, 'Elk', 'Route'], [`${MIG2}/30`, 'Elk', 'Route'],
+      ['https://services1.arcgis.com/CNfeg2bqPqhTN34y/arcgis/rest/services/Elk_AZ_Interstate17_Routes_Ver1_2019/FeatureServer/0', 'Elk', 'Route']
+    ],
+    ranges: [
+      [`${MIG2}/73`, 'Mule deer', 'Winter range'], [`${MIG2}/69`, 'Mule deer', 'Winter range'], [`${MIG2}/36`, 'Pronghorn', 'Winter range'],
+      [`${MIG2}/89`, 'Elk', 'Winter range'], [`${MIG2}/91`, 'Elk', 'Winter range'],
+      [`${MIG2}/74`, 'Mule deer', 'Stopover'], [`${MIG2}/70`, 'Mule deer', 'Stopover'],
+      [`${MIG2}/72`, 'Mule deer', 'Annual range'], [`${MIG2}/35`, 'Pronghorn', 'Annual range']
+    ]
+  },
+  drought: { label: 'US Drought Monitor (NDMC / USDA / NOAA, via Esri Living Atlas)', url: 'https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/US_Drought_Intensity_v1/FeatureServer/3' },
+  cropland: {
+    label: 'Cropland Data Layer (USDA NASS CroplandCROS)',
+    identify: 'https://pdi.scinet.usda.gov/image/rest/services/CDL_WM/ImageServer/identify',
+    legend: 'https://pdi.scinet.usda.gov/image/rest/services/CDL_WM/ImageServer/legend'
+  },
+  naip: { label: 'NAIP aerial photography (USGS)', query: 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/query' },
+  airQuality: { label: 'Air quality (Open-Meteo)', url: 'https://air-quality-api.open-meteo.com/v1/air-quality' }
 };
 
 // Parcel services. ADWR republishes every county assessor roll with OWNER_NAME in one MapServer;
@@ -172,14 +245,21 @@ export const RULES = {
 
 export const ATTRIBUTIONS = [
   'Imagery © Esri, Maxar, Earthstar Geographics',
-  'Topo, imagery, hydrography: USGS The National Map',
+  'Topo, imagery, hydrography, NAIP aerials, 3DEP lidar hillshade and contours: USGS The National Map',
+  'Daily satellite imagery, HLS 30 m scenes, snow cover, NDVI: NASA GIBS / Worldview',
+  'Weather radar: RainViewer',
+  'Snow depth: NOAA National Operational Hydrologic Remote Sensing Center',
+  'Drought: US Drought Monitor (NDMC, USDA, NOAA) via Esri Living Atlas',
+  'Cropland: USDA NASS Cropland Data Layer (CroplandCROS)',
+  'Migration corridors and ranges: USGS Western Migrations / Ungulate Migrations of the Western US; AZGFD',
   'Land ownership: BLM Surface Management Agency; AZGFD',
-  'Game units, wildlife areas, water projects: Arizona Game and Fish Department',
+  'Townships and sections: BLM PLSS CadNSDI',
+  'Game units, wildlife areas, water projects, ranges, CWD zones, wolf range, habitat projects: Arizona Game and Fish Department',
   'State Trust land: Arizona State Land Department',
   'Parcels: Arizona county assessors via ADWR, Maricopa, Pima, Coconino',
-  'Roads, trails, wilderness, forests: USDA Forest Service; BLM Arizona',
+  'Roads, trails, wilderness, forests, roadless areas, timber and fuels treatments: USDA Forest Service; BLM Arizona',
   'Fire perimeters: NIFC / WFIGS',
   'Elevation: Mapzen Terrain Tiles on AWS (USGS 3DEP, SRTM)',
-  'Weather: Open-Meteo (CC BY 4.0)',
+  'Weather and air quality: Open-Meteo (CC BY 4.0)',
   'Map engine: MapLibre GL JS (BSD-3)'
 ];

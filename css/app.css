@@ -172,3 +172,30 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .maplibregl-canvas:focus { outline: none; }
 .maplibregl-marker { will-change: transform; }
 @media (min-width: 700px) { .sheet, .card { left: auto; right: 12px; width: 420px; } .sheet { border-radius: 18px; bottom: calc(var(--tab-h) + var(--sab) + 12px); } .modal-box { max-width: 520px; border-radius: 18px; margin-bottom: 20px; } }
+
+/* ---- Species guide ---- */
+.gs { border: 1px solid var(--line); border-radius: 14px; background: var(--panel2); overflow: hidden; }
+.gs + .gs { margin-top: 8px; }
+.gs summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; font-weight: 650; font-size: 15px; }
+.gs summary::-webkit-details-marker { display: none; }
+.gs summary::after { content: "+"; color: var(--muted); font-size: 18px; font-weight: 500; }
+.gs[open] summary::after { content: "−"; }
+.gs .gs-body { padding: 0 14px 12px 14px; font-size: 14px; }
+.gs .gs-body p { margin: 6px 0; } .gs .gs-body ul { padding-left: 18px; margin: 6px 0; } .gs .gs-body li { margin: 5px 0; }
+.gs .gs-body .kv { font-size: 13.5px; }
+.cal12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
+.cal12 .m { height: 40px; border-radius: 7px; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; color: #111; background: var(--panel3); line-height: 1.1; text-align: center; }
+.cal12 .m.rut { background: var(--accent); color: var(--accent-fg); } .cal12 .m.prime { background: var(--green); } .cal12 .m.ok { background: var(--warn); } .cal12 .m.off { background: var(--panel3); color: var(--muted); }
+.cal12 .m.now { outline: 2px solid var(--fg); outline-offset: 1px; }
+.shot { background: var(--panel3); border-radius: 12px; padding: 8px; }
+.shot svg { width: 100%; height: auto; display: block; }
+.phase { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+.phase b { display: block; font-size: 14.5px; } .phase span { font-size: 13px; color: var(--muted); }
+
+/* Sightings insights histograms */
+.hist { margin-top: 6px; } .hist h3 { margin-bottom: 4px; }
+.hrow { display: grid; grid-template-columns: 118px 1fr 28px; align-items: center; gap: 8px; padding: 3px 0; font-size: 12.5px; }
+.hrow .hl { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hrow .hb { height: 10px; background: var(--panel3); border-radius: 5px; overflow: hidden; }
+.hrow .hb i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+.hrow .hn { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }

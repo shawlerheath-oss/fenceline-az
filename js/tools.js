@@ -2,6 +2,7 @@
 import { RULES, SERVICES } from './config.js';
 import { queryPoint, pickValue } from './arcgis.js';
 import { elevationAt } from './terrain.js';
+import { cropAt } from './cropland.js';
 import { legalLight } from './sun.js';
 import { haversine, bearing, destination, lineLengthM, polygonAreaM2, pointInGeom, distToGeomEdgeM, compass16, norm360 } from './util.js';
 
@@ -108,6 +109,8 @@ export async function describePoint(app, lngLat) {
   if (truck) out.truck = { d: haversine(pt, truck.coords), brg: bearing(pt, truck.coords), name: truck.name };
   if (app.tracker.pos) out.fromYou = { d: haversine([app.tracker.pos.lon, app.tracker.pos.lat], pt), brg: bearing([app.tracker.pos.lon, app.tracker.pos.lat], pt) };
   out.legal = legalLight(new Date(), lat, lon, RULES.legal[app.settings.legalRule] || RULES.legal.bigGame);
+  // Crop type under the point while the cropland layer is on (USDA CDL identify).
+  if (app.layers.isOn('cropland')) tasks.push(cropAt(lon, lat).then((c) => { if (c) out.crop = c; }).catch(() => {}));
   await Promise.all(tasks);
   if (out.elev != null && app.tracker.pos && app.tracker.pos.alt != null) out.dz = out.elev - app.tracker.pos.alt;
   return out;

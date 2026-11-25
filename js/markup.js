@@ -30,8 +30,8 @@ export const KINDS = {
 };
 
 export class Markup {
-  constructor(map, { onSelect } = {}) {
-    this.map = map; this.items = new Map(); this.markers = new Map(); this.onSelect = onSelect || (() => {});
+  constructor(map, { onSelect, env } = {}) {
+    this.map = map; this.items = new Map(); this.markers = new Map(); this.onSelect = onSelect || (() => {}); this.env = env || null;
     this.visible = true; this.filterTag = null;
   }
   async load() {
@@ -45,7 +45,9 @@ export class Markup {
   tags() { const s = new Set(); for (const i of this.items.values()) (i.tags || []).forEach((t) => s.add(t)); return Array.from(s).sort(); }
 
   async add(item) {
-    const it = { id: uid(), type: 'point', kind: 'pin', name: '', notes: '', tags: [], photos: [], created: Date.now(), updated: Date.now(), ...item };
+    const base = { id: uid(), type: 'point', kind: 'pin', name: '', notes: '', tags: [], photos: [], created: Date.now(), updated: Date.now(), ...item };
+    const env = base.type === 'point' && !base.env && this.env ? this.env() : null;
+    const it = env ? { ...base, env } : base;
     if (!it.name) it.name = `${(KINDS[it.kind] || KINDS.pin).label} ${this.byKind(it.kind).length + 1}`;
     this.items.set(it.id, it); await store.put('markup', it.id, it); this.render(); return it;
   }

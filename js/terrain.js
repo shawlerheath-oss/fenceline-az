@@ -23,7 +23,7 @@ function toImageData(img) {
   return ctx.getImageData(0, 0, 256, 256);
 }
 
-async function demTile(z, x, y) {
+export async function demTile(z, x, y) {
   const key = `${z}/${x}/${y}`;
   if (demCache.has(key)) return demCache.get(key);
   const p = loadImage(demURL(z, x, y)).then(toImageData);
@@ -34,7 +34,7 @@ async function demTile(z, x, y) {
 
 export const decodeTerrarium = (r, g, b) => r * 256 + g + b / 256 - 32768;
 
-function sample(img, px, py) {
+export function sample(img, px, py) {
   const i = (Math.min(255, Math.max(0, py)) * 256 + Math.min(255, Math.max(0, px))) * 4;
   return decodeTerrarium(img.data[i], img.data[i + 1], img.data[i + 2]);
 }
@@ -65,7 +65,7 @@ export async function profile(coords, stepM = 30, haversine, destination, bearin
 }
 
 // Slope (deg) and aspect (deg, 0 = north) for a single pixel using a 3x3 window.
-function slopeAspectAt(img, px, py, mPerPx) {
+export function slopeAspectAt(img, px, py, mPerPx) {
   const z = (dx, dy) => sample(img, px + dx, py + dy);
   const a = z(-1, -1); const b = z(0, -1); const c = z(1, -1);
   const d = z(-1, 0); const f = z(1, 0);
@@ -91,7 +91,7 @@ function aspectColor(a, slope) {
   return [c0[0] + (c1[0] - c0[0]) * t, c0[1] + (c1[1] - c0[1]) * t, c0[2] + (c1[2] - c0[2]) * t, 165];
 }
 
-function metersPerPixel(z, y) {
+export function metersPerPixel(z, y) {
   const n = 2 ** z; const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n)));
   return (40075016.686 * Math.cos(lat)) / (n * 256);
 }

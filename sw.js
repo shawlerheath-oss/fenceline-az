@@ -1,5 +1,5 @@
 /* Fenceline service worker: app shell + map tile caching for offline hunts. */
-const VERSION = 'fl-shell-v1';
+const VERSION = 'fl-shell-v2';
 const RUNTIME = 'fl-runtime-v1';
 const OFFLINE = 'fl-offline-v1';
 const RUNTIME_LIMIT = 6000;
@@ -13,14 +13,19 @@ const SHELL = [
   './js/weather.js', './js/markup.js', './js/tracking.js', './js/tools.js',
   './js/offline.js', './js/species.js', './js/features.js', './js/units.js',
   './js/ui.js', './js/panels.js', './js/editors.js', './js/icons.js',
+  './js/imagery.js', './js/cropland.js', './js/guides.js', './js/guide-data.js', './js/guide-data-2.js', './js/habitat.js', './js/insights.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
 ];
 
 const TILE_HOSTS = [
   'server.arcgisonline.com', 'basemap.nationalmap.gov', 'elevation-tiles-prod',
-  'gis.blm.gov', 'demotiles.maplibre.org'
+  'gis.blm.gov', 'demotiles.maplibre.org',
+  // Dated or stamped image services: every URL names its date, so cache-first is safe.
+  'gibs.earthdata.nasa.gov', 'tilecache.rainviewer.com', 'elevation.nationalmap.gov', 'imagery.nationalmap.gov',
+  'pdi.scinet.usda.gov', 'mapservices.weather.noaa.gov'
 ];
-const DATA_HOSTS = ['arcgis.com', 'open-meteo.com', 'fs.usda.gov', 'azgfd', 'maricopa.gov', 'pima.gov', 'pinal.gov', 'yavapaiaz.gov', 'coconino.az.gov', 'mohave.gov'];
+const DATA_HOSTS = ['arcgis.com', 'open-meteo.com', 'fs.usda.gov', 'azgfd', 'maricopa.gov', 'pima.gov', 'pinal.gov', 'yavapaiaz.gov', 'coconino.az.gov', 'mohave.gov',
+  'api.rainviewer.com', 'hydro.nationalmap.gov', 'gisdata.azland.gov', 'azwatermaps.azwater.gov'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {

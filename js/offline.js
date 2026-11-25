@@ -24,7 +24,7 @@ export const TILE_SETS = {
   hydro: { label: 'Streams & washes', tiles: TILES.usgsHydro, kb: 5 },
   dem: { label: 'Terrain (3D, slope, elevation)', tiles: TILES.terrarium, kb: 60, maxzoom: 13, xy: true }
 };
-export const FEATURE_SETS = ['gmu', 'parcels', 'stateTrust', 'tanks', 'springs', 'hpcWater', 'mvum', 'mvumTrails', 'trails', 'wilderness', 'fires'];
+export const FEATURE_SETS = ['gmu', 'parcels', 'stateTrust', 'sections', 'tanks', 'springs', 'hpcWater', 'mvum', 'mvumTrails', 'trails', 'wilderness', 'wildlifeAreas', 'fires', 'migration', 'winterRange'];
 
 export function estimate(bbox, maxZ, sets) {
   let tiles = 0; let kb = 0;

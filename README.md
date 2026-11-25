@@ -10,6 +10,13 @@ A personal Arizona hunting map for iPhone. It runs as a home-screen web app (PWA
 - Water: NHD stock tanks and ponds, springs and seeps, AZGFD water projects, USGS stream and wash overlay.
 - Roads and trails: Forest Service MVUM roads colored by designation with open dates, motorized trails, hiking trails, BLM recreation sites, wilderness and forest boundaries, grazing allotments, State Trust parcels with lessee.
 - Terrain: 3D tilt, hillshade, slope-angle and aspect shading computed on the phone.
+- Lidar hillshade and contours from USGS 3DEP; township and section lines (PLSS) with the legal description on tap.
+- Conditions: live radar, snow depth and snow cover, 8-day green-up (NDVI), weekly drought monitor, each with Older/Newer date buttons; air quality (smoke, dust, UV) in the forecast sheet.
+- Imagery that changes: NASA HLS Sentinel-2 and Landsat scenes every few days, daily MODIS and VIIRS true color, NAIP aerials.
+- Habitat: Forest Service timber harvests and fuel treatments, roadless areas, AZGFD habitat restoration, USDA crop fields with tap-to-identify feed fields.
+- Wildlife: USGS Western Migrations corridors, routes and winter ranges for mule deer, elk and pronghorn; AZGFD species ranges, CWD zones, Mexican wolf range.
+- Species guides for eighteen Arizona hunts: where they live month by month, breeding calendar, daily pattern, food and water, sign and tracks, tactics, calling, field judging, shot-placement diagrams, after the shot, meat care in heat, draw calendar and rules, well-known units. A habitat-finder overlay shades ground that fits the species this month.
+- Sightings insights: every waypoint saves time, wind, temperature, pressure trend and moon, and the app charts your own logs by time of day, wind, pressure, moon and month. Compass heading-up mode turns the map with you.
 - Burn history since 2005 colored by year, plus this year's fires.
 - Weather: 7-day hourly forecast, pressure trend, activity score, legal shooting hours, sunrise and sunset, moon.
 - Stands with approach bearing: good / marginal / bad wind rating, best winds, 48-hour wind calendar, live scent cones on the map.
@@ -52,6 +59,9 @@ All data comes directly from public servers; nothing is proxied or stored by any
 - Parcels: county assessors via Arizona Department of Water Resources; Maricopa County Assessor; Pima County; Coconino County.
 - MVUM roads, trails, wilderness, forest boundaries: USDA Forest Service EDW. BLM Arizona wilderness and recreation sites.
 - Fire perimeters: NIFC / WFIGS.
+- Imagery over time: NASA GIBS (MODIS, VIIRS, HLS, NDVI, snow cover); USGS NAIP Plus; USGS 3DEP lidar hillshade and contours.
+- Conditions: RainViewer radar; NOAA NOHRSC snow depth; US Drought Monitor via Esri Living Atlas; Open-Meteo air quality.
+- Habitat and wildlife: USFS EDW timber harvests, fuel treatments and roadless areas; USDA NASS Cropland Data Layer (CroplandCROS); USGS Western Migrations (Ungulate Migrations of the Western United States, vol. 2); AZGFD species ranges, CWD zones and wolf range; BLM CadNSDI PLSS.
 - Elevation: Mapzen Terrarium tiles on AWS (USGS 3DEP, SRTM).
 - Weather: Open-Meteo (CC BY 4.0). Place search: OpenStreetMap Nominatim.
 - Map engine: MapLibre GL JS 4.7.1 (BSD-3), vendored in `vendor/`.
@@ -72,6 +82,9 @@ js/tools.js           measure, scent, boundary guard, identify
 js/weather.js         Open-Meteo and wind logic        js/sun.js  sun, legal light, moon
 js/terrain.js         elevation, slope and aspect tiles js/offline.js  area downloads
 js/species.js         species presets        js/features.js  competitor feature coverage
+js/guides.js          species guide panel    js/guide-data.js, js/guide-data-2.js  guide text
+js/habitat.js         habitat-finder tiles   js/imagery.js   dated imagery resolvers (GIBS, HLS, radar)
+js/cropland.js        crop identify          js/insights.js  sightings insights and condition snapshots
 js/units.js           GMU helpers            js/basemaps.js  basemaps
 js/arcgis.js          ArcGIS REST client     js/store.js     IndexedDB
 js/util.js            geometry and formatting js/ui.js      sheet, card, modal, toast

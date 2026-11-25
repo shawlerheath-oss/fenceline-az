@@ -9,6 +9,7 @@ import { COUNTY_PARCELS, TZ } from './config.js';
 import { unitName } from './units.js';
 import { h, esc, qs, qsa, fmtDist, fmtArea, fmtDate, fmtTime, compass16, haversine, bearing, bboxIntersects, pointInGeom } from './util.js';
 import { fmtBearing } from './tools.js';
+import { envText } from './insights.js';
 
 const kindGrid = (cur) => `<div class="grid-kinds">${Object.entries(KINDS).map(([k, v]) => `<button type="button" data-kind="${k}" class="${k === cur ? 'on' : ''}"><span class="mk-dot" style="--c:${v.color}">${markerSVG(v.glyph)}</span>${esc(v.label)}</button>`).join('')}</div>`;
 
@@ -27,6 +28,7 @@ export function waypointEditor(app, item) {
   root.appendChild(h(`<label class="field">Name<input type="text" name="name" value="${esc(item.name)}"></label>`));
   if (item.type === 'point') root.appendChild(h(`<label class="field">Type${kindGrid(item.kind)}</label>`));
   root.appendChild(h(`<label class="field">Notes<textarea name="notes" placeholder="What did you see? Wind, time, sign…">${esc(item.notes || '')}</textarea></label>`));
+  if (item.env) root.appendChild(h(`<p class="small muted" style="margin:-4px 0 0">${icon('wind')} Logged ${esc(envText(item.env, app.settings.units))}</p>`));
   root.appendChild(h(`<label class="field">Tags (comma separated)<input type="text" name="tags" value="${esc((item.tags || []).join(', '))}" placeholder="unit 6A, 2026 elk, scouting"></label>`));
   if (item.kind === 'stand' && item.type === 'point') root.appendChild(standBlock(app, item));
   root.appendChild(photosBlock(app, item));
@@ -159,7 +161,13 @@ async function fetchLayerForOffline(lid, def, bbox) {
     return { type: 'FeatureCollection', features: feats };
   }
   const feats = [];
-  for (const u of def.urls || []) { try { const fc = await queryFeatures(u, { bbox: def.kind === 'static' ? null : bbox, where: def.where || '1=1', outFields: def.outFields || '*', maxPages: 8, precision: def.precision || 6 }); feats.push(...fc.features); } catch (_) { /* skip */ } }
+  for (const [i, u] of (def.urls || []).entries()) {
+    try {
+      const fc = await queryFeatures(u, { bbox: def.kind === 'static' ? (def.bbox || null) : bbox, where: def.where || '1=1', outFields: def.outFields || '*', maxPages: 8, precision: def.precision || 6, simplify: def.simplify });
+      const tag = def.tags && def.tags[i];
+      feats.push(...(tag ? fc.features.map((f) => ({ ...f, properties: { ...f.properties, ...tag } })) : fc.features));
+    } catch (_) { /* skip */ }
+  }
   return { type: 'FeatureCollection', features: feats };
 }
 function normalizeParcel(f, c) {

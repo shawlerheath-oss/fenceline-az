@@ -11,15 +11,16 @@ async function getJSON(url, signal) {
   }, { tries: 2, delay: 500 });
 }
 
-export async function queryFeatures(url, { bbox, where = '1=1', outFields = '*', pageSize = 2000, maxPages = 4, signal, precision = 6, orderBy } = {}) {
+export async function queryFeatures(url, { bbox, where = '1=1', outFields = '*', pageSize = 2000, maxPages = 4, signal, precision = 6, orderBy, simplify, returnGeometry = true } = {}) {
   const features = []; let offset = 0;
   for (let page = 0; page < maxPages; page++) {
     const p = new URLSearchParams({
-      f: 'geojson', where, outFields, returnGeometry: 'true', outSR: '4326',
+      f: 'geojson', where, outFields, returnGeometry: String(returnGeometry), outSR: '4326',
       geometryPrecision: String(precision), resultRecordCount: String(pageSize), resultOffset: String(offset)
     });
     if (bbox) { p.set('geometry', bbox.join(',')); p.set('geometryType', 'esriGeometryEnvelope'); p.set('inSR', '4326'); p.set('spatialRel', 'esriSpatialRelIntersects'); }
     if (orderBy) p.set('orderByFields', orderBy);
+    if (simplify) p.set('maxAllowableOffset', String(simplify));
     const gj = await getJSON(`${url}/query?${p}`, signal);
     const batch = gj.features || [];
     features.push(...batch);
