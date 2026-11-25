@@ -12,6 +12,7 @@ import { icon, markerSVG } from './icons.js';
 import { h, esc, qs, qsa, fmtDist, fmtElev, fmtArea, fmtSpeed, fmtTemp, fmtTime, fmtDate, fmtDuration, compass16, haversine, bearing, round } from './util.js';
 import { fmtBearing } from './tools.js';
 import { guideBlock } from './guides.js';
+import { readinessBlock } from './editors.js';
 
 const kindDot = (kind, color) => `<span class="mk-dot" style="--c:${color || (KINDS[kind] || KINDS.pin).color}">${markerSVG((KINDS[kind] || KINDS.pin).glyph)}</span>`;
 const sw = (on) => `<span class="switch ${on ? 'on' : ''}" role="switch" aria-checked="${on}"></span>`;
@@ -301,12 +302,29 @@ export function aboutPanel() {
     <h3>Know the limits</h3><ul class="steps small"><li>Boundaries, ownership, and unit lines are informational. Confirm on the ground and in the current AZGFD regulations.</li><li>GPS stops when the screen locks. Keep the screen on while tracking or using boundary alerts.</li><li>Stock tank and spring data does not say whether water is present today.</li></ul>`));
   return root;
 }
-export function installPanel() {
+export function installPanel(app) {
   const root = h('<div class="stack"></div>');
   root.appendChild(h(`<div class="sheet-title"><h2>Install on iPhone</h2><button class="btn btn-ghost btn-icon" data-close aria-label="Close">${icon('close')}</button></div>`));
   const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-  root.appendChild(h(standalone ? '<p class="pill ok">Installed and running full screen.</p>' : `<ol class="steps"><li>Open this page in Safari.</li><li>Tap the Share button (square with an arrow).</li><li>Scroll and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open Fenceline from the Home Screen. Allow Location when asked.</li><li>Go to More → Offline maps and download your unit before you lose signal.</li></ol>
-    <p class="small muted">iOS keeps the app and its downloads as long as you open it now and then. Safari may clear data for sites you have not opened in a long while.</p>`));
+  const ua = navigator.userAgent; const isIOS = /iPhone|iPad/.test(ua); const notSafari = /CriOS|FxiOS|EdgiOS|OPT\/|DuckDuckGo/.test(ua);
+  const url = `${location.origin}${location.pathname}`;
+  if (standalone) root.appendChild(h('<p class="pill ok">Installed and running full screen.</p>'));
+  else {
+    if (isIOS && notSafari) root.appendChild(h('<p class="pill warn">This browser cannot add apps to the Home Screen. Copy the link below and open it in Safari.</p>'));
+    root.appendChild(h('<ol class="steps"><li>Open this page in <b>Safari</b>.</li><li>Tap the Share button (the square with an arrow).</li><li>Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open Fenceline from the Home Screen. It runs full screen, keeps GPS while open, and works with no signal.</li><li>When asked, allow Location ("While Using" with Precise Location on).</li></ol>'));
+  }
+  root.appendChild(h(`<div class="kv"><span>Link</span><b class="small">${esc(url)}</b></div>`));
+  const share = h(`<div class="row gap"><button class="btn" data-copy>Copy link</button>${navigator.share ? '<button class="btn" data-share>Share link</button>' : ''}</div>`);
+  qs('[data-copy]', share).addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); app.ui.toast('Link copied'); } catch (_) { window.prompt('Copy this link', url); } });
+  const sb = qs('[data-share]', share); if (sb) sb.addEventListener('click', () => navigator.share({ title: 'Fenceline', url }).catch(() => {}));
+  root.appendChild(share);
+  root.appendChild(h('<h3>Works offline</h3>'));
+  root.appendChild(readinessBlock(app));
+  root.appendChild(h('<p class="small muted">The app saves itself on the phone the first time it opens, so it starts with no signal. Map tiles and layer data for your hunt area are saved from Offline maps. Markup, tracks, species guides and the hunt log always work offline.</p>'));
+  const go = h(`<div class="row gap"><button class="btn btn-primary" data-offline>${icon('download')} Offline maps</button></div>`);
+  qs('[data-offline]', go).addEventListener('click', () => app.openPanel('offline'));
+  root.appendChild(go);
+  root.appendChild(h('<p class="small muted">iOS keeps the app and its downloads as long as you open it now and then. Safari may clear data for sites you have not opened in a long while.</p>'));
   return root;
 }
 export function unitsPanel(app) {

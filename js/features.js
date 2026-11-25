@@ -4,7 +4,7 @@ export const FEATURES = [
   { f: 'Public land ownership colors (BLM, USFS, State Trust, tribal)', who: 'onX, HuntStand, BaseMap', s: 'in', how: 'BLM Surface Management Agency tiles plus tap-to-identify manager and owner.' },
   { f: 'Game management unit boundaries', who: 'onX, GoHunt, HuntStand', s: 'in', how: 'AZGFD units with region, acreage, and links to the unit page.' },
   { f: 'Wildlife water, tanks, springs', who: 'onX Elite (Water Sources), BaseMap', s: 'in', how: 'NHD stock tanks and reservoirs, NHD springs, AZGFD water projects, USGS hydrography overlay.' },
-  { f: 'Offline maps', who: 'onX Premium, HuntStand Pro, BaseMap Pro, Gaia', s: 'in', how: 'Download any area: imagery, topo, land, and layer features saved on the phone.' },
+  { f: 'Offline maps', who: 'onX Premium, HuntStand Pro, BaseMap Pro, Gaia', s: 'in', how: 'Download the view or a whole unit: imagery, topo, lidar, contours, terrain and 28 layer sets saved on the phone. The app itself and its label fonts are saved on first open.' },
   { f: 'Satellite, topo, hybrid basemaps', who: 'All', s: 'in', how: 'Esri imagery, USGS topo, Esri topo, shaded relief, USGS imagery.' },
   { f: '3D terrain', who: 'onX Elite, BaseMap Pro, Gaia', s: 'in', how: 'Tilt the map; elevation from USGS 3DEP via terrain tiles.' },
   { f: 'Slope angle and aspect shading', who: 'onX Elite, BaseMap Pro, Gaia, CalTopo', s: 'in', how: 'Computed on the phone from elevation tiles; sheep, Coues, and shed presets turn it on.' },

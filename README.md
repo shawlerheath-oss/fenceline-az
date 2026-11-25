@@ -22,7 +22,7 @@ A personal Arizona hunting map for iPhone. It runs as a home-screen web app (PWA
 - Stands with approach bearing: good / marginal / bad wind rating, best winds, 48-hour wind calendar, live scent cones on the map.
 - Waypoints with 23 hunting icons, notes, tags, photos; lines and areas; measure distance and area; GPX, KML and GeoJSON import and export.
 - Track recording, back-to-truck distance and bearing, boundary alerts for parcels you have permission on.
-- Offline: download imagery, topo, land, terrain and layer data for any area.
+- Offline: the app and its label fonts are saved on the phone at first open. Download satellite, topo, lidar hillshade, contours, NAIP, terrain, land ownership and 28 layer data sets for the view on screen or a whole game unit. More → Install shows what is saved and can re-save it.
 
 ## Install on an iPhone
 
@@ -31,7 +31,7 @@ Live copy: **https://shawlerheath-oss.github.io/fenceline-az/** (GitHub Pages, r
 1. Open that URL in Safari on the iPhone.
 2. Tap Share, then **Add to Home Screen**, then **Add**.
 3. Open Fenceline from the Home Screen. Allow Location when asked (choose "While Using" and turn on Precise Location).
-4. Before heading out: More → Offline maps, zoom to your unit, download.
+4. Before heading out: More → Offline maps, pick **This view** or **Unit N**, choose the detail, download. The "App files on phone" line should read all saved.
 
 ### Test on the same Wi-Fi without hosting
 

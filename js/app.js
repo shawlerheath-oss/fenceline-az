@@ -12,7 +12,7 @@ import { Tracker } from './tracking.js';
 import { Measure, scentConeFC, installScentLayers, BoundaryGuard, describePoint, fmtBearing } from './tools.js';
 import { getForecast } from './weather.js';
 import { legalLight, moonPhase } from './sun.js';
-import { makeOfflineProvider, clearAllOffline } from './offline.js';
+import { makeOfflineProvider, clearAllOffline, ensureGlyphs } from './offline.js';
 import { speciesById } from './species.js';
 import { UI } from './ui.js';
 import * as P from './panels.js';
@@ -75,7 +75,7 @@ app.openPanel = async (name, arg) => {
     case 'settings': content = P.settingsPanel(app); break;
     case 'features': content = P.featuresPanel(); break;
     case 'about': content = P.aboutPanel(); break;
-    case 'install': content = P.installPanel(); break;
+    case 'install': content = P.installPanel(app); break;
     case 'units': content = P.unitsPanel(app); break;
     case 'unit': content = P.unitPanel(app, arg); break;
     case 'guide': content = G.guidePanel(app, arg); break;
@@ -356,6 +356,9 @@ function onLoad() {
   applyBasemap(map, app.settings.basemap);
   app.layers = new LayerManager(map, { onChange: () => { saveLayers(); app.refreshPanel('layers'); }, onStatus: () => app.refreshPanel('layers') });
   app.layers.setOfflineProvider(makeOfflineProvider());
+  // Label glyphs are fetched from a CDN; keep a copy so map labels render with no signal.
+  if (navigator.onLine !== false) ensureGlyphs().catch(() => {});
+  window.addEventListener('online', () => ensureGlyphs().catch(() => {}));
   installScentLayers(map); Markup.installLayers(map); Tracker.installLayers(map); Measure.installLayers(map);
   app.markup = new Markup(map, { onSelect: (it) => app.selectItem(it), env: () => I.envSnapshot(app) });
   app.tracker = new Tracker(map, { onPosition, onError: (e) => app.ui.toast(gpsError(e)), onRecord: () => app.updateStatus(), onHeading: (hd) => app.onHeading(hd) });
@@ -369,7 +372,7 @@ function onLoad() {
   app.refreshWeather(); app.tickLegal(); setInterval(app.tickLegal, 30000);
   if (app.settings.is3D) app.toggle3D(true);
   const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-  store.getKV('seenInstall', false).then((seen) => { if (!standalone && !seen && /iPhone|iPad/.test(navigator.userAgent)) { app.ui.toast('Tip: Share → Add to Home Screen to install', 5000); store.setKV('seenInstall', true); } });
+  store.getKV('seenInstall', false).then((seen) => { if (!standalone && !seen && /iPhone|iPad/.test(navigator.userAgent)) { setTimeout(() => app.openPanel('install'), 1500); store.setKV('seenInstall', true); } });
   console.info(`Fenceline ${APP_VERSION} ready`);
 }
 boot().catch((e) => { console.error(e); document.body.insertAdjacentHTML('beforeend', `<div class="banner alert" style="top:60px">Startup failed: ${esc(e.message)}</div>`); });

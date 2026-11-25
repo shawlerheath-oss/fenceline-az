@@ -1,5 +1,5 @@
 /* Fenceline service worker: app shell + map tile caching for offline hunts. */
-const VERSION = 'fl-shell-v2';
+const VERSION = 'fl-shell-v3';
 const RUNTIME = 'fl-runtime-v1';
 const OFFLINE = 'fl-offline-v1';
 const RUNTIME_LIMIT = 6000;
@@ -43,8 +43,19 @@ self.addEventListener('activate', (e) => {
   })());
 });
 
+// Page messages: 'skipWaiting', or { type: 'shellStatus' | 'recache' } with a MessageChannel port for the reply.
 self.addEventListener('message', (e) => {
-  if (e.data === 'skipWaiting') self.skipWaiting();
+  const d = e.data; const type = typeof d === 'string' ? d : d && d.type;
+  if (type === 'skipWaiting') { self.skipWaiting(); return; }
+  if (type !== 'shellStatus' && type !== 'recache') return;
+  e.waitUntil((async () => {
+    const c = await caches.open(VERSION);
+    const missing = async () => { const out = []; for (const u of SHELL) if (!(await c.match(u, { ignoreSearch: true }))) out.push(u); return out; };
+    let miss = await missing();
+    if (type === 'recache' && miss.length) { await Promise.allSettled(miss.map((u) => c.add(u))); miss = await missing(); }
+    const port = e.ports && e.ports[0];
+    if (port) port.postMessage({ type, version: VERSION, total: SHELL.length, cached: SHELL.length - miss.length, missing: miss });
+  })());
 });
 
 function isTile(url) { return TILE_HOSTS.some((h) => url.hostname.includes(h) || url.href.includes(h)); }
@@ -71,7 +82,8 @@ self.addEventListener('fetch', (e) => {
     e.respondWith((async () => {
       const cached = await caches.match(req, { ignoreSearch: true });
       const network = fetch(req).then((res) => {
-        if (res && res.ok) caches.open(VERSION).then((c) => c.put(req, res.clone())).catch(() => {});
+        // Clone before the page starts reading the body, or the copy fails and the shell never refreshes.
+        if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {}); }
         return res;
       }).catch(() => null);
       if (cached) { network.catch(() => {}); return cached; }

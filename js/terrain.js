@@ -23,16 +23,41 @@ function toImageData(img) {
   return ctx.getImageData(0, 0, 256, 256);
 }
 
+// Offline downloads keep DEM tiles to z13; a deeper tile that fails to load is rebuilt from its parent tile.
+const DEM_FALLBACK_MIN_Z = 9;
 export async function demTile(z, x, y) {
   const key = `${z}/${x}/${y}`;
   if (demCache.has(key)) return demCache.get(key);
-  const p = loadImage(demURL(z, x, y)).then(toImageData);
+  const p = loadImage(demURL(z, x, y)).then(toImageData).catch(async (e) => {
+    if (z <= DEM_FALLBACK_MIN_Z) throw e;
+    return upsampleQuadrant(await demTile(z - 1, x >> 1, y >> 1), x & 1, y & 1);
+  });
   demCache.set(key, p);
   if (demCache.size > MAX_DEM) demCache.delete(demCache.keys().next().value);
   try { return await p; } catch (e) { demCache.delete(key); throw e; }
 }
 
 export const decodeTerrarium = (r, g, b) => r * 256 + g + b / 256 - 32768;
+
+// Bilinear upsample of one quadrant (qx, qy in 0..1) of a parent Terrarium tile into a full 256x256 child tile.
+function upsampleQuadrant(parent, qx, qy) {
+  const out = new ImageData(256, 256);
+  const ox = qx * 128; const oy = qy * 128;
+  for (let py = 0; py < 256; py++) {
+    const sy = oy + (py + 0.5) / 2 - 0.5; const y0 = Math.floor(sy); const fy = sy - y0;
+    for (let px = 0; px < 256; px++) {
+      const sx = ox + (px + 0.5) / 2 - 0.5; const x0 = Math.floor(sx); const fx = sx - x0;
+      const top = sample(parent, x0, y0) * (1 - fx) + sample(parent, x0 + 1, y0) * fx;
+      const bot = sample(parent, x0, y0 + 1) * (1 - fx) + sample(parent, x0 + 1, y0 + 1) * fx;
+      encodeTerrarium(out.data, (py * 256 + px) * 4, top * (1 - fy) + bot * fy);
+    }
+  }
+  return out;
+}
+function encodeTerrarium(data, o, elev) {
+  const v = Math.max(0, elev + 32768); const r = Math.floor(v / 256); const g = Math.floor(v - r * 256);
+  data[o] = r; data[o + 1] = g; data[o + 2] = Math.min(255, Math.round((v - r * 256 - g) * 256)); data[o + 3] = 255;
+}
 
 export function sample(img, px, py) {
   const i = (Math.min(255, Math.max(0, py)) * 256 + Math.min(255, Math.max(0, px))) * 4;

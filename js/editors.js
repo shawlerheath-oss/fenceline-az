@@ -2,12 +2,12 @@
 import { KINDS, shrinkPhoto } from './markup.js';
 import { icon, markerSVG } from './icons.js';
 import { rateStand, bestWinds } from './weather.js';
-import { TILE_SETS, FEATURE_SETS, estimate, downloadArea, listAreas, removeArea, storageEstimate } from './offline.js';
+import { TILE_SETS, FEATURE_SETS, DEFAULT_SETS, MAX_TILES, estimate, downloadArea, listAreas, removeArea, storageEstimate, offlineReadiness, recacheShell, ensureGlyphs } from './offline.js';
 import { LAYER_DEFS } from './layers.js';
 import { queryFeatures } from './arcgis.js';
 import { COUNTY_PARCELS, TZ } from './config.js';
 import { unitName } from './units.js';
-import { h, esc, qs, qsa, fmtDist, fmtArea, fmtDate, fmtTime, compass16, haversine, bearing, bboxIntersects, pointInGeom } from './util.js';
+import { h, esc, qs, qsa, fmtDist, fmtArea, fmtDate, fmtTime, compass16, haversine, bearing, bboxIntersects, bboxOfGeom, pointInGeom } from './util.js';
 import { fmtBearing } from './tools.js';
 import { envText } from './insights.js';
 
@@ -105,37 +105,75 @@ export function shapeDrawer(app, type) {
   app.onMeasureChange = render; render();
 }
 
+// App-shell and label-font status with a repair button, shared by the Offline and Install panels.
+export function readinessBlock(app) {
+  const el = h(`<div class="col"><div class="kv"><span>App files on phone</span><b data-shell>checking…</b></div><div class="kv"><span>Map label font</span><b data-glyph>checking…</b></div><div class="row gap"><button type="button" class="btn btn-sm" data-recache>Re-save app files</button></div></div>`);
+  const fill = async () => {
+    const r = await offlineReadiness();
+    const sh = qs('[data-shell]', el); const gl = qs('[data-glyph]', el);
+    if (!r.shell) { sh.textContent = navigator.onLine === false ? 'unknown while offline' : 'saving… reopen this panel in a moment'; sh.className = 'pill warn'; }
+    else { const full = r.shell.cached === r.shell.total; sh.textContent = full ? `all ${r.shell.total} saved` : `${r.shell.cached} of ${r.shell.total} saved`; sh.className = full ? 'pill ok' : 'pill warn'; }
+    const gfull = r.glyphs.cached === r.glyphs.total && r.glyphs.total > 0;
+    gl.textContent = gfull ? 'saved' : `${r.glyphs.cached} of ${r.glyphs.total} saved`; gl.className = gfull ? 'pill ok' : 'pill warn';
+  };
+  qs('[data-recache]', el).addEventListener('click', async () => {
+    const b = qs('[data-recache]', el); b.disabled = true; b.textContent = 'Saving…';
+    try { await recacheShell(); await ensureGlyphs(); app.ui.toast('App files saved for offline'); }
+    catch (e) { app.ui.toast(`Could not save everything: ${e.message}`); }
+    finally { await fill().catch(() => {}); b.disabled = false; b.textContent = 'Re-save app files'; }
+  });
+  fill().catch(() => {});
+  return el;
+}
+
 // ---------- Offline ----------
+const ZOOM_CHOICES = [[13, 'Unit 13'], [14, 'Scout 14'], [15, 'Hunt 15'], [16, 'Fine 16']];
 export async function offlinePanel(app) {
   const root = h('<div class="stack"></div>');
   root.appendChild(h(`<div class="sheet-title"><h2>Offline maps</h2><button class="btn btn-ghost btn-icon" data-close aria-label="Close">${icon('close')}</button></div>`));
   const est = await storageEstimate();
-  root.appendChild(h(`<p class="small muted">Downloads the area on screen. ${est.usage != null ? `Using ${(est.usage / 1048576).toFixed(0)} MB of ${(est.quota / 1073741824).toFixed(1)} GB available · ${est.tiles} tiles saved.` : ''}</p>`));
+  root.appendChild(h(`<p class="small muted">Save map tiles and layer data on the phone for hunting with no signal. ${est.usage != null ? `Using ${(est.usage / 1048576).toFixed(0)} MB of ${(est.quota / 1073741824).toFixed(1)} GB available · ${est.tiles.toLocaleString()} tiles saved.` : ''}</p>`));
+  root.appendChild(readinessBlock(app));
+  const unit = app.unitHere; const unitNm = unit ? String(unitName(unit.properties)) : '';
   const form = h(`<div>
-    <label class="field">Name<input type="text" name="name" placeholder="Unit 6A north" value="${app.unitHere ? `Unit ${esc(unitName(app.unitHere.properties))}` : ''}"></label>
-    <label class="field">Detail (max zoom)<div class="seg"><button type="button" data-z="13" >Overview 13</button><button type="button" data-z="15" class="on">Hunt 15</button><button type="button" data-z="16">Fine 16</button></div></label>
-    <label class="field">Map tiles</label><div class="col" data-sets>${Object.entries(TILE_SETS).map(([k, s]) => `<label class="row between"><span>${esc(s.label)}</span><span class="switch ${['sat', 'sma', 'dem'].includes(k) ? 'on' : ''}" data-set="${k}"></span></label>`).join('')}</div>
-    <label class="field">Layer data</label><div class="col" data-feats>${FEATURE_SETS.map((k) => `<label class="row between"><span>${esc(LAYER_DEFS[k].label)}</span><span class="switch on" data-feat="${k}"></span></label>`).join('')}</div>
+    <label class="field">Area<div class="seg"><button type="button" data-area="view" class="on">This view</button>${unit ? `<button type="button" data-area="unit">Unit ${esc(unitNm)}</button>` : ''}</div></label>
+    <label class="field">Name<input type="text" name="name" placeholder="Unit 6A north" value="${unit ? `Unit ${esc(unitNm)}` : ''}"></label>
+    <label class="field">Detail (sharp to map zoom)<div class="seg">${ZOOM_CHOICES.map(([z, l]) => `<button type="button" data-z="${z}" class="${z === 15 ? 'on' : ''}">${l}</button>`).join('')}</div></label>
+    <label class="field">Map tiles</label><div class="col" data-sets>${Object.entries(TILE_SETS).map(([k, s]) => `<label class="row between"><span>${esc(s.label)}</span><span class="switch ${DEFAULT_SETS.includes(k) ? 'on' : ''}" data-set="${k}"></span></label>`).join('')}</div>
+    <details class="gs"><summary>Layer data <span class="muted small" data-nfeat></span></summary><div class="gs-body"><div class="row gap"><button type="button" class="btn btn-sm" data-all="1">All</button><button type="button" class="btn btn-sm" data-all="0">None</button></div><div class="col" data-feats>${FEATURE_SETS.filter((k) => LAYER_DEFS[k]).map((k) => `<label class="row between"><span>${esc(LAYER_DEFS[k].label)}</span><span class="switch on" data-feat="${k}"></span></label>`).join('')}</div></div></details>
     <p class="small b" data-est></p><div class="progress" hidden><i style="width:0"></i></div><p class="small muted" data-prog></p>
-    <div class="row gap"><button class="btn btn-primary" data-dl>${icon('download')} Download this view</button></div></div>`);
+    <div class="row gap"><button class="btn btn-primary" data-dl>${icon('download')} <span>Download this view</span></button></div></div>`);
   root.appendChild(form);
-  let maxZ = 15;
-  const bbox = () => { const b = app.map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]; };
+  let maxZ = 15; let areaMode = 'view';
+  const bbox = () => { if (areaMode === 'unit') return bboxOfGeom(unit.geometry); const b = app.map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]; };
   const sets = () => qsa('[data-set].on', form).map((x) => x.dataset.set);
   const feats = () => qsa('[data-feat].on', form).map((x) => x.dataset.feat);
-  const updEst = () => { const e = estimate(bbox(), maxZ, sets()); qs('[data-est]', form).textContent = `${e.km2.toLocaleString()} km² · ${e.tiles.toLocaleString()} tiles · about ${e.mb} MB`; if (e.tiles > 25000) qs('[data-est]', form).textContent += ' · zoom in or lower detail'; };
-  qsa('[data-z]', form).forEach((b) => b.addEventListener('click', () => { maxZ = +b.dataset.z; qsa('[data-z]', form).forEach((x) => x.classList.toggle('on', x === b)); updEst(); }));
+  const setZ = (z) => { maxZ = z; qsa('[data-z]', form).forEach((x) => x.classList.toggle('on', +x.dataset.z === z)); };
+  const updEst = () => {
+    const e = estimate(bbox(), maxZ, sets());
+    qs('[data-est]', form).textContent = `${e.km2.toLocaleString()} km² · ${e.tiles.toLocaleString()} tiles · about ${e.mb} MB${e.tiles > MAX_TILES ? ' · too big, lower the detail' : ''}`;
+    qs('[data-nfeat]', form).textContent = `${feats().length} of ${FEATURE_SETS.length} on`;
+    qs('[data-dl] span', form).textContent = areaMode === 'unit' ? `Download Unit ${unitNm}` : 'Download this view';
+  };
+  qsa('[data-area]', form).forEach((b) => b.addEventListener('click', () => {
+    areaMode = b.dataset.area; qsa('[data-area]', form).forEach((x) => x.classList.toggle('on', x === b));
+    // A whole unit is big: step the detail down until it fits the tile budget.
+    while (maxZ > 13 && estimate(bbox(), maxZ, sets()).tiles > MAX_TILES) setZ(maxZ - 1);
+    updEst();
+  }));
+  qsa('[data-z]', form).forEach((b) => b.addEventListener('click', () => { setZ(+b.dataset.z); updEst(); }));
   qsa('.switch', form).forEach((s) => s.addEventListener('click', () => { s.classList.toggle('on'); updEst(); }));
+  qsa('[data-all]', form).forEach((b) => b.addEventListener('click', () => { qsa('[data-feat]', form).forEach((s) => s.classList.toggle('on', b.dataset.all === '1')); updEst(); }));
   updEst();
   qs('[data-dl]', form).addEventListener('click', async () => {
-    const e = estimate(bbox(), maxZ, sets()); if (e.tiles > 25000) { app.ui.toast('Too big. Zoom in or lower the detail.'); return; }
+    const e = estimate(bbox(), maxZ, sets()); if (e.tiles > MAX_TILES) { app.ui.toast('Too big. Zoom in or lower the detail.'); return; }
     const btn = qs('[data-dl]', form); btn.disabled = true; const bar = qs('.progress', form); bar.hidden = false; const prog = qs('[data-prog]', form);
     const ac = new AbortController(); app.ui.setToolbar(`<span class="grow">Downloading…</span><button class="btn btn-sm" data-cancel>Cancel</button>`); qs('[data-cancel]', app.ui.el.toolbar).addEventListener('click', () => ac.abort());
     try {
-      const area = await downloadArea({ name: qs('[name=name]', form).value.trim(), bbox: bbox(), maxZ, sets: sets(), features: feats(), signal: ac.signal,
+      const area = await downloadArea({ name: qs('[name=name]', form).value.trim() || (areaMode === 'unit' ? `Unit ${unitNm}` : ''), bbox: bbox(), maxZ, sets: sets(), features: feats(), signal: ac.signal,
         fetchFeatures: (lid, def, bb) => fetchLayerForOffline(lid, def, bb),
         onProgress: ({ stage, done, total, failed }) => { qs('i', bar).style.width = `${Math.round((done / Math.max(1, total)) * 100)}%`; prog.textContent = stage === 'tiles' ? `Tiles ${done}/${total}${failed ? ` (${failed} failed)` : ''}` : `Layers ${done}/${total}`; } });
-      app.ui.toast(`Saved "${area.name}" · ${area.tiles} tiles`);
+      app.ui.toast(`Saved "${area.name}" · ${area.tiles.toLocaleString()} tiles`);
       app.openPanel('offline');
     } catch (err) { app.ui.toast(`Download stopped: ${err.message}`); btn.disabled = false; }
     finally { app.ui.setToolbar(null); }

@@ -365,11 +365,18 @@ export class LayerManager {
     this._setStatus(id, 'loading');
     try {
       let fc = def.cacheKey ? await store.get('cache', def.cacheKey) : null;
+      const stale = fc;
       if (fc && def.ttl && Date.now() - (fc.fetchedAt || 0) > def.ttl && navigator.onLine !== false) fc = null;
       if (!fc) {
-        fc = await this._fetchBbox(def, def.bbox || null, new AbortController().signal);
-        fc.fetchedAt = Date.now();
-        if (def.cacheKey) await store.put('cache', def.cacheKey, fc);
+        try {
+          fc = await this._fetchBbox(def, def.bbox || null, new AbortController().signal);
+          fc.fetchedAt = Date.now();
+          if (def.cacheKey) await store.put('cache', def.cacheKey, fc);
+        } catch (e) {
+          // No network: use the expired copy, then any saved offline area that includes this layer.
+          fc = stale || (this.offlineProvider ? await this.offlineProvider(id, [-180, -90, 180, 90]) : null);
+          if (!fc) throw e;
+        }
       }
       if (!this.on.has(id)) return;
       this._merge(id, def, fc, [-180, -90, 180, 90]);
