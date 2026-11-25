@@ -1,6 +1,7 @@
 // Elevation sampling and slope/aspect raster protocols built from Terrarium DEM tiles.
 import { TILES } from './config.js';
 import { lonLatToTileFrac } from './util.js';
+import { fetchTile } from './tile-cache.js';
 
 const DEM_Z = 12;
 const demCache = new Map(); // key -> ImageData (256x256)
@@ -9,7 +10,7 @@ const MAX_DEM = 120;
 function demURL(z, x, y) { return TILES.terrarium.replace('{z}', z).replace('{x}', x).replace('{y}', y); }
 
 async function loadImage(url) {
-  const res = await fetch(url, { mode: 'cors' });
+  const res = await fetchTile(url, { mode: 'cors' });
   if (!res.ok) throw new Error(`DEM ${res.status}`);
   const blob = await res.blob();
   if (typeof createImageBitmap === 'function') return createImageBitmap(blob);

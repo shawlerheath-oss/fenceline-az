@@ -1,5 +1,5 @@
 /* Fenceline service worker: app shell + map tile caching for offline hunts. */
-const VERSION = 'fl-shell-v3';
+const VERSION = 'fl-shell-v4';
 const RUNTIME = 'fl-runtime-v1';
 const OFFLINE = 'fl-offline-v1';
 const RUNTIME_LIMIT = 6000;
@@ -11,7 +11,7 @@ const SHELL = [
   './js/app.js', './js/config.js', './js/util.js', './js/sun.js', './js/store.js',
   './js/arcgis.js', './js/terrain.js', './js/basemaps.js', './js/layers.js',
   './js/weather.js', './js/markup.js', './js/tracking.js', './js/tools.js',
-  './js/offline.js', './js/species.js', './js/features.js', './js/units.js',
+  './js/offline.js', './js/native.js', './js/tile-cache.js', './js/geo.js', './js/species.js', './js/features.js', './js/units.js',
   './js/ui.js', './js/panels.js', './js/editors.js', './js/icons.js',
   './js/imagery.js', './js/cropland.js', './js/guides.js', './js/guide-data.js', './js/guide-data-2.js', './js/habitat.js', './js/insights.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'

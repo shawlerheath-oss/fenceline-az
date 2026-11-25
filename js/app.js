@@ -13,6 +13,8 @@ import { Measure, scentConeFC, installScentLayers, BoundaryGuard, describePoint,
 import { getForecast } from './weather.js';
 import { legalLight, moonPhase } from './sun.js';
 import { makeOfflineProvider, clearAllOffline, ensureGlyphs } from './offline.js';
+import { isNative } from './native.js';
+import { installTileCache } from './tile-cache.js';
 import { speciesById } from './species.js';
 import { UI } from './ui.js';
 import * as P from './panels.js';
@@ -215,7 +217,7 @@ app.updateStatus = () => {
   if (app.tracker.rec) pills.push({ html: `● REC ${fmtDist(app.tracker.rec.distM, u)}`, cls: 'rec' });
   app.ui.setStatus(pills);
 };
-function gpsError(e) { return e && e.code === 1 ? 'Location denied. Allow it in Settings → Privacy → Location → Safari/Fenceline.' : 'No GPS fix. Move outside or wait a moment.'; }
+function gpsError(e) { return e && e.code === 1 ? `Location denied. Allow it in Settings → Privacy → Location → ${isNative() ? 'Fenceline' : 'Safari'}.` : 'No GPS fix. Move outside or wait a moment.'; }
 
 // ---------- Map interactions ----------
 function bindMap() {
@@ -324,7 +326,8 @@ app.toggle3D = (force) => {
 
 // ---------- Service worker ----------
 function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
+  // The app ships its files inside the bundle and reads tiles through tile-cache.js; no worker runs on capacitor://localhost.
+  if (isNative() || !('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('./sw.js').then((reg) => {
     reg.addEventListener('updatefound', () => { const nw = reg.installing; nw && nw.addEventListener('statechange', () => { if (nw.state === 'installed' && navigator.serviceWorker.controller) app.ui.toast('Update ready. Close and reopen Fenceline.', 5000); }); });
   }).catch(() => {});
@@ -338,7 +341,9 @@ async function boot() {
   app.ui = new UI(app);
   registerSW();
   registerTerrainProtocols(maplibregl); registerHabitatProtocol(maplibregl);
+  const transformRequest = isNative() ? installTileCache(maplibregl) : undefined;
   const map = new maplibregl.Map({
+    transformRequest,
     container: 'map', center: app.settings.center || DEFAULT_CENTER, zoom: app.settings.zoom || DEFAULT_ZOOM,
     style: { version: 8, glyphs: GLYPHS, sources: {}, layers: [{ id: 'anchor-base', type: 'background', paint: { 'background-color': '#0b0f0a' } }] },
     maxBounds: [[AZ_BOUNDS[0][0] - 4, AZ_BOUNDS[0][1] - 3], [AZ_BOUNDS[1][0] + 4, AZ_BOUNDS[1][1] + 3]], minZoom: 5, maxZoom: 19.5, maxPitch: 70,
@@ -371,7 +376,7 @@ function onLoad() {
   bindUI(); bindMap(); updateLabels();
   app.refreshWeather(); app.tickLegal(); setInterval(app.tickLegal, 30000);
   if (app.settings.is3D) app.toggle3D(true);
-  const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const standalone = isNative() || window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   store.getKV('seenInstall', false).then((seen) => { if (!standalone && !seen && /iPhone|iPad/.test(navigator.userAgent)) { setTimeout(() => app.openPanel('install'), 1500); store.setKV('seenInstall', true); } });
   console.info(`Fenceline ${APP_VERSION} ready`);
 }

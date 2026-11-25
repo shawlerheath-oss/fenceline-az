@@ -1,32 +1,31 @@
 // GPS position, heading, track recording, wake lock.
 import { store } from './store.js';
+import { geo } from './geo.js';
 import { haversine, uid, lineLengthM } from './util.js';
 import { markerSVG } from './icons.js';
 
 export class Tracker {
   constructor(map, { onPosition, onError, onRecord, onHeading } = {}) {
-    this.map = map; this.pos = null; this.heading = null; this.watchId = null; this.follow = false; this.wake = null;
+    this.map = map; this.pos = null; this.heading = null; this.watch = null; this.follow = false; this.wake = null;
     this.rec = null; this.onPosition = onPosition || (() => {}); this.onError = onError || (() => {}); this.onRecord = onRecord || (() => {}); this.onHeading = onHeading || (() => {});
     this.marker = null; this.accCircle = null;
     this._lastRecPos = null;
   }
-  get active() { return this.watchId != null; }
+  get active() { return this.watch != null; }
 
   start() {
-    if (!navigator.geolocation) { this.onError(new Error('No GPS on this device')); return; }
-    if (this.watchId != null) return;
-    this.watchId = navigator.geolocation.watchPosition((p) => this._update(p), (e) => this.onError(e), { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+    if (!geo.available) { this.onError(new Error('No GPS on this device')); return; }
+    if (this.watch) return;
+    this.watch = geo.watch((p) => this._update(p), (e) => this.onError(e));
     this._startHeading();
   }
   stop() {
-    if (this.watchId != null) navigator.geolocation.clearWatch(this.watchId); this.watchId = null;
+    if (this.watch) this.watch.stop(); this.watch = null;
     this.follow = false; this.releaseWake();
   }
   locate() {
-    return new Promise((ok, bad) => {
-      if (!navigator.geolocation) return bad(new Error('No GPS on this device'));
-      navigator.geolocation.getCurrentPosition((p) => { this._update(p); ok(this.pos); }, bad, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 });
-    });
+    if (!geo.available) return Promise.reject(new Error('No GPS on this device'));
+    return geo.current().then((p) => { this._update(p); return this.pos; });
   }
   _update(p) {
     const c = p.coords;

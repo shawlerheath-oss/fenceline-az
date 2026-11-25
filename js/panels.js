@@ -13,6 +13,7 @@ import { h, esc, qs, qsa, fmtDist, fmtElev, fmtArea, fmtSpeed, fmtTemp, fmtTime,
 import { fmtBearing } from './tools.js';
 import { guideBlock } from './guides.js';
 import { readinessBlock } from './editors.js';
+import { isNative } from './native.js';
 
 const kindDot = (kind, color) => `<span class="mk-dot" style="--c:${color || (KINDS[kind] || KINDS.pin).color}">${markerSVG((KINDS[kind] || KINDS.pin).glyph)}</span>`;
 const sw = (on) => `<span class="switch ${on ? 'on' : ''}" role="switch" aria-checked="${on}"></span>`;
@@ -299,13 +300,13 @@ export function aboutPanel() {
   root.appendChild(h(`<div class="sheet-title"><h2>About</h2><button class="btn btn-ghost btn-icon" data-close aria-label="Close">${icon('close')}</button></div>`));
   root.appendChild(h(`<p>Fenceline ${APP_VERSION}. A personal Arizona hunting map. Everything runs on your phone; map data comes straight from public agency servers.</p>
     <h3>Data sources</h3><ul class="steps small">${ATTRIBUTIONS.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>
-    <h3>Know the limits</h3><ul class="steps small"><li>Boundaries, ownership, and unit lines are informational. Confirm on the ground and in the current AZGFD regulations.</li><li>GPS stops when the screen locks. Keep the screen on while tracking or using boundary alerts.</li><li>Stock tank and spring data does not say whether water is present today.</li></ul>`));
+    <h3>Know the limits</h3><ul class="steps small"><li>Boundaries, ownership, and unit lines are informational. Confirm on the ground and in the current AZGFD regulations.</li><li>${isNative() ? 'GPS keeps running with the screen locked while Follow is on or a track is recording.' : 'GPS stops when the screen locks. Keep the screen on while tracking or using boundary alerts.'}</li><li>Stock tank and spring data does not say whether water is present today.</li></ul>`));
   return root;
 }
 export function installPanel(app) {
   const root = h('<div class="stack"></div>');
   root.appendChild(h(`<div class="sheet-title"><h2>Install on iPhone</h2><button class="btn btn-ghost btn-icon" data-close aria-label="Close">${icon('close')}</button></div>`));
-  const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const standalone = isNative() || window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   const ua = navigator.userAgent; const isIOS = /iPhone|iPad/.test(ua); const notSafari = /CriOS|FxiOS|EdgiOS|OPT\/|DuckDuckGo/.test(ua);
   const url = `${location.origin}${location.pathname}`;
   if (standalone) root.appendChild(h('<p class="pill ok">Installed and running full screen.</p>'));

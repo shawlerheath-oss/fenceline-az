@@ -111,7 +111,8 @@ export function readinessBlock(app) {
   const fill = async () => {
     const r = await offlineReadiness();
     const sh = qs('[data-shell]', el); const gl = qs('[data-glyph]', el);
-    if (!r.shell) { sh.textContent = navigator.onLine === false ? 'unknown while offline' : 'saving… reopen this panel in a moment'; sh.className = 'pill warn'; }
+    if (r.shell && r.shell.native) { sh.textContent = 'built into the app'; sh.className = 'pill ok'; }
+    else if (!r.shell) { sh.textContent = navigator.onLine === false ? 'unknown while offline' : 'saving… reopen this panel in a moment'; sh.className = 'pill warn'; }
     else { const full = r.shell.cached === r.shell.total; sh.textContent = full ? `all ${r.shell.total} saved` : `${r.shell.cached} of ${r.shell.total} saved`; sh.className = full ? 'pill ok' : 'pill warn'; }
     const gfull = r.glyphs.cached === r.glyphs.total && r.glyphs.total > 0;
     gl.textContent = gfull ? 'saved' : `${r.glyphs.cached} of ${r.glyphs.total} saved`; gl.className = gfull ? 'pill ok' : 'pill warn';

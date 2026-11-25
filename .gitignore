@@ -1,3 +1,9 @@
 .claude/
 .DS_Store
 Thumbs.db
+
+# Node and Capacitor
+node_modules/
+dist/
+build/
+*.log

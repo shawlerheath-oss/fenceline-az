@@ -1,0 +1,14 @@
+{
+  "appId": "com.fenceline.app",
+  "appName": "Fenceline",
+  "webDir": "dist",
+  "loggingBehavior": "production",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "allowsLinkPreview": false,
+    "backgroundColor": "#10140e",
+    "preferredContentMode": "mobile",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}

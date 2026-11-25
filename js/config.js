@@ -1,7 +1,7 @@
 // Fenceline configuration: Arizona bounds, tile templates, and public GIS services.
 // Every endpoint below was checked live (HTTP 200, CORS allowed, f=geojson where queried) on 2026-11-24.
 
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.5.0';
 export const TZ = 'America/Phoenix';
 
 export const AZ_BOUNDS = [[-115.2, 31.0], [-108.6, 37.3]];

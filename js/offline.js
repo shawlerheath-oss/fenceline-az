@@ -3,8 +3,10 @@ import { TILES, SERVICES, GLYPHS, FONT } from './config.js';
 import { LAYER_DEFS } from './layers.js';
 import { store } from './store.js';
 import { lonLatToTile, uid, bboxIntersects, bboxAreaKm2 } from './util.js';
+import { isNative } from './native.js';
+import { OFFLINE_CACHE } from './tile-cache.js';
 
-export const OFFLINE_CACHE = 'fl-offline-v1';
+export { OFFLINE_CACHE };
 export const MAX_TILES = 25000;
 const CONCURRENCY = 6;
 const MIN_Z = 8;
@@ -159,8 +161,10 @@ function askWorker(type, timeoutMs = 5000) {
     ctl.postMessage({ type }, [ch.port2]);
   });
 }
-export const shellStatus = () => askWorker('shellStatus');
-export const recacheShell = () => askWorker('recache', 90000);
+// Inside the app the shell is part of the bundle, so there is nothing to cache or repair.
+const NATIVE_SHELL = { type: 'shellStatus', native: true, version: 'app', total: 0, cached: 0, missing: [] };
+export const shellStatus = () => (isNative() ? Promise.resolve(NATIVE_SHELL) : askWorker('shellStatus'));
+export const recacheShell = () => (isNative() ? Promise.resolve(NATIVE_SHELL) : askWorker('recache', 90000));
 export async function offlineReadiness() {
   const [shell, glyphs, areas] = await Promise.all([shellStatus(), glyphStatus().catch(() => ({ cached: 0, total: 0 })), listAreas().catch(() => [])]);
   return { shell, glyphs, areas: areas.length };
