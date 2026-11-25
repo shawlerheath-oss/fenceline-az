@@ -1,6 +1,6 @@
 # Fenceline
 
-A personal Arizona hunting map for iPhone. It runs as a home-screen web app (PWA) with GPS, offline map downloads, and live public GIS data. No account, no subscription, no app store.
+A personal Arizona hunting map for iPhone. It runs as a home-screen web app (PWA) with GPS, offline map downloads, and live public GIS data. No account, no subscription, no app store. The same files also build into a native iOS app that keeps GPS running with the screen locked; see [docs/install-ios.md](docs/install-ios.md).
 
 ## What it does
 
@@ -33,6 +33,12 @@ Live copy: **https://shawlerheath-oss.github.io/fenceline-az/** (GitHub Pages, r
 3. Open Fenceline from the Home Screen. Allow Location when asked (choose "While Using" and turn on Precise Location).
 4. Before heading out: More → Offline maps, pick **This view** or **Unit N**, choose the detail, download. The "App files on phone" line should read all saved.
 
+## Install as a native app (GPS with the screen locked)
+
+Every push to `main` builds `Fenceline.ipa` with GitHub Actions ([iOS app workflow](https://github.com/shawlerheath-oss/fenceline-az/actions/workflows/ios.yml)), and every `v*` tag attaches it to a [GitHub Release](https://github.com/shawlerheath-oss/fenceline-az/releases). The IPA is unsigned; a free Apple ID and Sideloadly or AltStore on a Windows PC install it on the phone for 7 days at a time. [docs/install-ios.md](docs/install-ios.md) has the steps, and what changes with a paid developer account.
+
+The native app is the web app in a Capacitor WKWebView plus two plugins: `@capacitor/geolocation` and `@capacitor-community/background-geolocation`, so track recording, Follow and boundary alerts keep running while the screen is locked. Offline downloads work the same way (the app reads the same caches through a MapLibre protocol instead of the service worker).
+
 ### Test on the same Wi-Fi without hosting
 
 From this folder on the PC: `python -m http.server 8793`, then on the phone open `http://<pc-ip>:8793`. GPS does not work over plain http on a non-localhost address, so this is only for a look at the map.
@@ -43,7 +49,7 @@ The app caches itself for offline use. After new files are uploaded to the host,
 
 ## iOS limits to know
 
-- GPS stops when the screen locks. The app keeps the screen awake while tracking or following; carry a battery.
+- In the web app, GPS stops when the screen locks, so the app keeps the screen awake while tracking or following; carry a battery. The native app (above) keeps GPS running with the screen locked.
 - No push notifications. Alerts are on-screen and audible while the app is open.
 - The app's storage is tied to the Home Screen icon. Deleting the icon deletes markup and downloads; export GPX regularly.
 - Safari can evict data from web apps not opened for a long time. Open the app every few weeks.
@@ -88,9 +94,19 @@ js/cropland.js        crop identify          js/insights.js  sightings insights 
 js/units.js           GMU helpers            js/basemaps.js  basemaps
 js/arcgis.js          ArcGIS REST client     js/store.js     IndexedDB
 js/util.js            geometry and formatting js/ui.js      sheet, card, modal, toast
+js/native.js          detects the Capacitor app and loads its plugins
+js/geo.js             GPS source: navigator.geolocation on the web, background plugins in the app
+js/tile-cache.js      cache-first tile loading for the app (replaces the service worker there)
+vendor/capacitor-core.js  Capacitor bridge, loaded only inside the app
+capacitor.config.json native app id, name and WKWebView settings
+scripts/build-web.mjs copies the web files into dist/ for Capacitor
+ios/                  Xcode project (Swift Package Manager, no CocoaPods)
+tests/                node --test unit tests for the native pieces
+.github/workflows/ios.yml  builds the unsigned IPA on macOS runners
+docs/install-ios.md   installing the IPA from Windows
 ```
 
-Nothing to build. Edit a file, reload.
+The web app has nothing to build: edit a file, reload. The native app needs Node: `npm ci`, `npm test`, then `npm run ios:sync` to copy the web files and refresh the Xcode project (`npm run ios:open` on a Mac).
 
 ## Disclaimer
 
