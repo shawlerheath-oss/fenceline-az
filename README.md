@@ -19,16 +19,12 @@ A personal Arizona hunting map for iPhone. It runs as a home-screen web app (PWA
 
 ## Install on an iPhone
 
-The app has to be served over HTTPS (or from localhost) for GPS, the service worker and offline storage to work.
+Live copy: **https://shawlerheath-oss.github.io/fenceline-az/** (GitHub Pages, rebuilt on every push to `main`). The app has to be served over HTTPS for GPS, the service worker and offline storage to work.
 
-1. Host this folder somewhere with HTTPS. Options:
-   - GitHub Pages: push the folder to a repository, enable Pages on the `main` branch root. The URL will be `https://<user>.github.io/<repo>/`.
-   - Cloudflare Pages or Netlify: drag-and-drop the folder.
-   - Any static web host.
-2. Open the URL in Safari on the iPhone.
-3. Tap Share, then **Add to Home Screen**, then **Add**.
-4. Open Fenceline from the Home Screen. Allow Location when asked (choose "While Using" and turn on Precise Location).
-5. Before heading out: More → Offline maps, zoom to your unit, download.
+1. Open that URL in Safari on the iPhone.
+2. Tap Share, then **Add to Home Screen**, then **Add**.
+3. Open Fenceline from the Home Screen. Allow Location when asked (choose "While Using" and turn on Precise Location).
+4. Before heading out: More → Offline maps, zoom to your unit, download.
 
 ### Test on the same Wi-Fi without hosting
 
